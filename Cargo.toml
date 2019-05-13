@@ -1,0 +1,25 @@
+[package]
+name = "apcacli"
+version = "0.0.0"
+authors = ["Daniel Mueller <deso@posteo.net>"]
+edition = "2018"
+license = "GPL-3.0-or-later"
+homepage = "https://github.com/d-e-s-o/apcacli"
+repository = "https://github.com/d-e-s-o/apcacli.git"
+categories = [
+  "api-bindings",
+  "asynchronous",
+  "command-line-utilities",
+  "web-programming::http-client",
+  "web-programming::websocket"
+]
+keywords = ["cli", "trading", "finance", "async", "stocks"]
+description = """
+A command line tool for trading stocks on Alpaca (alpaca.markets).
+"""
+
+[dependencies]
+apca = "0.1"
+futures = "0.1"
+structopt = "0.2"
+tokio = {version = "0.1", default-features = false}
