@@ -21,5 +21,6 @@ A command line tool for trading stocks on Alpaca (alpaca.markets).
 [dependencies]
 apca = "0.1"
 futures = "0.1"
+num-decimal = "0.1"
 structopt = "0.2"
 tokio = {version = "0.1", default-features = false}

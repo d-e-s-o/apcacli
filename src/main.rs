@@ -1,13 +1,19 @@
 // Copyright (C) 2019 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::str::FromStr;
+
 use apca::api::v1::account;
+use apca::api::v1::asset;
+use apca::api::v1::order;
 use apca::ApiInfo;
 use apca::Client;
 use apca::Error;
 
 use futures::future::Future;
 use futures::future::ok;
+
+use num_decimal::Num;
 
 use structopt::StructOpt;
 
@@ -20,6 +26,57 @@ enum Opts {
   /// Retrieve information about the Alpaca account.
   #[structopt(name = "account")]
   Account,
+  /// Perform various order related functions.
+  #[structopt(name = "order")]
+  Order(Order),
+}
+
+
+#[derive(Debug, StructOpt)]
+enum Order {
+  /// Submit an order.
+  #[structopt(name = "submit")]
+  Submit {
+    /// The side of the order.
+    side: Side,
+    /// The symbol of the asset involved in the order.
+    symbol: String,
+    /// The quantity to trade.
+    quantity: u64,
+    /// Create a limit order (or stop limit order) with the given limit price.
+    #[structopt(short = "l", long = "limit")]
+    limit_price: Option<Num>,
+    /// Create a stop order (or stop limit order) with the given stop price.
+    #[structopt(short = "s", long = "stop")]
+    stop_price: Option<Num>,
+    /// Create an order that is only valid for today.
+    #[structopt(long = "today")]
+    today: bool,
+  },
+}
+
+
+#[derive(Debug, StructOpt)]
+enum Side {
+  /// Buy an asset.
+  Buy,
+  /// Sell an asset.
+  Sell,
+}
+
+impl FromStr for Side {
+  type Err = String;
+
+  fn from_str(side: &str) -> Result<Self, Self::Err> {
+    match side {
+      "buy" => Ok(Side::Buy),
+      "sell" => Ok(Side::Sell),
+      s => Err(format!(
+        "{} is not a valid side specification (use 'buy' or 'sell')",
+        s
+      )),
+    }
+  }
 }
 
 
@@ -73,6 +130,60 @@ fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = Error>>, 
 }
 
 
+fn order(client: Client, order: Order) -> Result<Box<dyn Future<Item = (), Error = Error>>, Error> {
+  match order {
+    Order::Submit {
+      side,
+      symbol,
+      quantity,
+      limit_price,
+      stop_price,
+      today,
+    } => {
+      let side = match side {
+        Side::Buy => order::Side::Buy,
+        Side::Sell => order::Side::Sell,
+      };
+
+      let type_ = match (limit_price.is_some(), stop_price.is_some()) {
+        (true, true) => order::Type::StopLimit,
+        (true, false) => order::Type::Limit,
+        (false, true) => order::Type::Stop,
+        (false, false) => order::Type::Market,
+      };
+
+      let time_in_force = if today {
+        order::TimeInForce::Day
+      } else {
+        order::TimeInForce::UntilCanceled
+      };
+
+      let request = order::OrderReq {
+        // TODO: We should probably support other forms of specifying
+        //       the symbol.
+        symbol: asset::Symbol::Sym(symbol),
+        quantity,
+        side,
+        type_,
+        time_in_force,
+        limit_price,
+        stop_price,
+      };
+
+      let fut = client
+        .issue::<order::Post>(request)?
+        .map_err(Error::from)
+        .and_then(|order| {
+          println!("{}", order.id.to_hyphenated_ref());
+          ok(())
+        });
+
+      Ok(Box::new(fut))
+    },
+  }
+}
+
+
 fn main() -> Result<(), Error> {
   let opts = Opts::from_args();
   let api_info = ApiInfo::from_env()?;
@@ -80,6 +191,7 @@ fn main() -> Result<(), Error> {
 
   let future = match opts {
     Opts::Account => account(client),
+    Opts::Order(order) => self::order(client, order),
   }?;
 
   block_on_all(future)
