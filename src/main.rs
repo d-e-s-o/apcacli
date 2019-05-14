@@ -19,6 +19,9 @@ use structopt::StructOpt;
 
 use tokio::runtime::current_thread::block_on_all;
 
+use uuid::parser::ParseError;
+use uuid::Uuid;
+
 
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
@@ -53,6 +56,9 @@ enum Order {
     #[structopt(long = "today")]
     today: bool,
   },
+  /// Cancel an order.
+  #[structopt(name = "cancel")]
+  Cancel { id: OrderId },
 }
 
 
@@ -76,6 +82,18 @@ impl FromStr for Side {
         s
       )),
     }
+  }
+}
+
+
+#[derive(Debug)]
+struct OrderId(order::Id);
+
+impl FromStr for OrderId {
+  type Err = ParseError;
+
+  fn from_str(id: &str) -> Result<Self, Self::Err> {
+    Ok(OrderId(order::Id(Uuid::parse_str(id)?)))
   }
 }
 
@@ -178,6 +196,10 @@ fn order(client: Client, order: Order) -> Result<Box<dyn Future<Item = (), Error
           ok(())
         });
 
+      Ok(Box::new(fut))
+    },
+    Order::Cancel { id } => {
+      let fut = client.issue::<order::Delete>(id.0)?.map_err(Error::from);
       Ok(Box::new(fut))
     },
   }

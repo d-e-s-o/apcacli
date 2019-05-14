@@ -24,3 +24,4 @@ futures = "0.1"
 num-decimal = "0.1"
 structopt = "0.2"
 tokio = {version = "0.1", default-features = false}
+uuid = {version = "0.7", features = ["v4"]}
