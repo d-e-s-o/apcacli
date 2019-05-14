@@ -15,6 +15,10 @@ use futures::future::ok;
 
 use num_decimal::Num;
 
+use simplelog::Config;
+use simplelog::LevelFilter;
+use simplelog::SimpleLogger;
+
 use structopt::StructOpt;
 
 use tokio::runtime::current_thread::block_on_all;
@@ -25,7 +29,17 @@ use uuid::Uuid;
 
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
-enum Opts {
+struct Opts {
+  #[structopt(subcommand)]
+  command: Command,
+  /// Increase verbosity (can be supplied multiple times).
+  #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+  verbosity: usize,
+}
+
+/// A command line client for automated trading with Alpaca.
+#[derive(Debug, StructOpt)]
+enum Command {
   /// Retrieve information about the Alpaca account.
   #[structopt(name = "account")]
   Account,
@@ -208,12 +222,20 @@ fn order(client: Client, order: Order) -> Result<Box<dyn Future<Item = (), Error
 
 fn main() -> Result<(), Error> {
   let opts = Opts::from_args();
+  let level = match opts.verbosity {
+    0 => LevelFilter::Warn,
+    1 => LevelFilter::Info,
+    2 => LevelFilter::Debug,
+    _ => LevelFilter::Trace,
+  };
+
+  let _ = SimpleLogger::init(level, Config::default());
   let api_info = ApiInfo::from_env()?;
   let client = Client::new(api_info)?;
 
-  let future = match opts {
-    Opts::Account => account(client),
-    Opts::Order(order) => self::order(client, order),
+  let future = match opts.command {
+    Command::Account => account(client),
+    Command::Order(order) => self::order(client, order),
   }?;
 
   block_on_all(future)
