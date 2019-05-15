@@ -1,11 +1,13 @@
 // Copyright (C) 2019 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::cmp::max;
 use std::str::FromStr;
 
 use apca::api::v1::account;
 use apca::api::v1::asset;
 use apca::api::v1::order;
+use apca::api::v1::orders;
 use apca::ApiInfo;
 use apca::Client;
 use apca::Error;
@@ -73,6 +75,9 @@ enum Order {
   /// Cancel an order.
   #[structopt(name = "cancel")]
   Cancel { id: OrderId },
+  /// List orders.
+  #[structopt(name = "list")]
+  List,
 }
 
 
@@ -216,7 +221,79 @@ fn order(client: Client, order: Order) -> Result<Box<dyn Future<Item = (), Error
       let fut = client.issue::<order::Delete>(id.0)?.map_err(Error::from);
       Ok(Box::new(fut))
     },
+    Order::List => order_list(client),
   }
+}
+
+
+/// Determine the maximum width of values produced by applying a
+/// function on each element of a slice.
+fn max_width<T, F>(slice: &[T], f: F) -> usize
+where
+  F: Fn(&T) -> usize,
+{
+  slice.iter().fold(0, |m, i| max(m, f(&i)))
+}
+
+
+/// Format a quantity.
+fn format_quantity(quantity: &Num) -> String {
+  format!("{:.0}", quantity)
+}
+
+
+/// List all currently open orders.
+fn order_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = Error>>, Error> {
+  let account = client.issue::<account::Get>(())?.map_err(Error::from);
+  let request = orders::OrdersReq { limit: 500 };
+  let orders = client.issue::<orders::Get>(request)?.map_err(Error::from);
+  let fut = account.join(orders).and_then(|(account, mut orders)| {
+    let currency = account.currency;
+
+    orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+
+    let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
+    let sym_max = max_width(&orders, |p| p.symbol.len());
+
+    for order in orders {
+      let side = match order.side {
+        order::Side::Buy => "buy",
+        order::Side::Sell => "sell",
+      };
+      let price = match (order.limit_price, order.stop_price) {
+        (Some(limit), Some(stop)) => {
+          debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
+          format!("stop @ {} {}, limit @ {} {}", stop, currency, limit, currency)
+        },
+        (Some(limit), None) => {
+          debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
+          format!("limit @ {} {}", limit, currency)
+        },
+        (None, Some(stop)) => {
+          debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
+          format!("stop @ {} {}", stop, currency)
+        },
+        (None, None) => {
+          debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
+          "".to_string()
+        },
+      };
+
+      println!(
+        "{id} {side:>4} {qty:>qty_width$} {sym:<sym_width$} {price}",
+        id = order.id.to_hyphenated_ref(),
+        side = side,
+        qty_width = qty_max,
+        qty = format!("{:.0}", order.quantity),
+        sym_width = sym_max,
+        sym = order.symbol,
+        price = price,
+      )
+    }
+    ok(())
+  });
+
+  Ok(Box::new(fut))
 }
 
 
