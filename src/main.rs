@@ -146,11 +146,11 @@ fn format_account_status(status: account::Status) -> String {
 
 
 /// The handler for the 'account' command.
-fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = String>>, String> {
+fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
   let fut = client
     .issue::<account::Get>(())
-    .map_err(|e| format!("failed to issue GET request to account endpoint: {}", e))?
-    .map_err(|e| format!("failed to retrieve account information: {}", e))
+    .map_err(|e| eprintln!("failed to issue GET request to account endpoint: {}", e))?
+    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))
     .and_then(|account| {
       println!(r#"account:
   id:                {id}
@@ -186,7 +186,7 @@ fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = String>>,
 fn order(
   client: Client,
   order: Order,
-) -> Result<Box<dyn Future<Item = (), Error = String>>, String> {
+) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
   match order {
     Order::Submit {
       side,
@@ -228,8 +228,8 @@ fn order(
 
       let fut = client
         .issue::<order::Post>(request)
-        .map_err(|e| format!("failed to issue POST request to order endpoint: {}", e))?
-        .map_err(|e| format!("failed to submit order: {}", e))
+        .map_err(|e| eprintln!("failed to issue POST request to order endpoint: {}", e))?
+        .map_err(|e| eprintln!("failed to submit order: {}", e))
         .and_then(|order| {
           println!("{}", order.id.to_hyphenated_ref());
           ok(())
@@ -240,8 +240,8 @@ fn order(
     Order::Cancel { id } => {
       let fut = client
         .issue::<order::Delete>(id.0)
-        .map_err(|e| format!("failed to issue DELETE request to order endpoint: {}", e))?
-        .map_err(|e| format!("failed to cancel order: {}", e));
+        .map_err(|e| eprintln!("failed to issue DELETE request to order endpoint: {}", e))?
+        .map_err(|e| eprintln!("failed to cancel order: {}", e));
       Ok(Box::new(fut))
     },
     Order::List => order_list(client),
@@ -266,17 +266,17 @@ fn format_quantity(quantity: &Num) -> String {
 
 
 /// List all currently open orders.
-fn order_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = String>>, String> {
+fn order_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
   let account = client
     .issue::<account::Get>(())
-    .map_err(|e| format!("failed to issue GET request to account endpoint: {}", e))?
-    .map_err(|e| format!("failed to retrieve account information: {}", e));
+    .map_err(|e| eprintln!("failed to issue GET request to account endpoint: {}", e))?
+    .map_err(|e| eprintln!("failed to retrieve account information: {}", e));
 
   let request = orders::OrdersReq { limit: 500 };
   let orders = client
     .issue::<orders::Get>(request)
-    .map_err(|e| format!("failed to issue GET request to orders endpoint: {}", e))?
-    .map_err(|e| format!("failed to list orders: {}", e));
+    .map_err(|e| eprintln!("failed to issue GET request to orders endpoint: {}", e))?
+    .map_err(|e| eprintln!("failed to list orders: {}", e));
 
   let fut = account.join(orders).and_then(|(account, mut orders)| {
     let currency = account.currency;
@@ -332,7 +332,7 @@ fn order_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = String
 fn position(
   client: Client,
   position: Position,
-) -> Result<Box<dyn Future<Item = (), Error = String>>, String> {
+) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
   match position {
     Position::List => position_list(client),
   }
@@ -358,16 +358,16 @@ fn format_percent(percent: &Num) -> String {
 
 
 /// List all currently open positions.
-fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = String>>, String> {
+fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
   let account = client
     .issue::<account::Get>(())
-    .map_err(|e| format!("failed to issue GET request to account endpoint: {}", e))?
-    .map_err(|e| format!("failed to retrieve account information: {}", e));
+    .map_err(|e| eprintln!("failed to issue GET request to account endpoint: {}", e))?
+    .map_err(|e| eprintln!("failed to retrieve account information: {}", e));
 
   let positions = client
     .issue::<positions::Get>(())
-    .map_err(|e| format!("failed to issue GET request to positions endpoint: {}", e))?
-    .map_err(|e| format!("failed to list positions: {}", e));
+    .map_err(|e| eprintln!("failed to issue GET request to positions endpoint: {}", e))?
+    .map_err(|e| eprintln!("failed to list positions: {}", e));
 
   let fut = account.join(positions).and_then(|(account, mut positions)| {
     let currency = account.currency;
@@ -438,7 +438,7 @@ fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = Str
   Ok(Box::new(fut))
 }
 
-fn run() -> Result<(), String> {
+fn run() -> Result<(), ()> {
   let opts = Opts::from_args();
   let level = match opts.verbosity {
     0 => LevelFilter::Warn,
@@ -449,10 +449,10 @@ fn run() -> Result<(), String> {
 
   let _ = SimpleLogger::init(level, Config::default());
   let api_info = ApiInfo::from_env().map_err(|e| {
-    format!("failed to retrieve Alpaca environment information: {}", e)
+    eprintln!("failed to retrieve Alpaca environment information: {}", e)
   })?;
   let client = Client::new(api_info).map_err(|e| {
-    format!("failed to create Alpaca client: {}", e)
+    eprintln!("failed to create Alpaca client: {}", e)
   })?;
 
   let future = match opts.command {
@@ -465,15 +465,9 @@ fn run() -> Result<(), String> {
 }
 
 fn main() {
-  let result = run();
+  let exit_code = run().map(|_| 0).unwrap_or(1);
   // We exit the process the hard way next, so make sure to flush
   // buffered content.
   let _ = stdout().flush();
-  match result {
-    Ok(()) => exit(0),
-    Err(err) => {
-      eprintln!("{}", err);
-      exit(1);
-    },
-  }
+  exit(exit_code)
 }
