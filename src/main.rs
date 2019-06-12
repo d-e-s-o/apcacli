@@ -15,8 +15,12 @@ use apca::api::v1::positions;
 use apca::ApiInfo;
 use apca::Client;
 
+use futures::future::Either;
 use futures::future::Future;
+use futures::future::err;
 use futures::future::ok;
+use futures::stream::futures_unordered;
+use futures_ext::StreamExt;
 
 use num_decimal::Num;
 
@@ -57,6 +61,7 @@ enum Command {
 }
 
 
+/// An enumeration representing the `order` command.
 #[derive(Debug, StructOpt)]
 enum Order {
   /// Submit an order.
@@ -78,12 +83,34 @@ enum Order {
     #[structopt(long = "today")]
     today: bool,
   },
-  /// Cancel an order.
+  /// Cancel a single order (by id) or all open ones (via 'all').
   #[structopt(name = "cancel")]
-  Cancel { id: OrderId },
+  Cancel { cancel: CancelOrder },
   /// List orders.
   #[structopt(name = "list")]
   List,
+}
+
+
+/// An enumeration of the different options for order cancellation.
+#[derive(Debug)]
+enum CancelOrder {
+  /// Cancel a single order as specified by an `OrderId`.
+  ById(OrderId),
+  /// Cancel all open orders.
+  All,
+}
+
+impl FromStr for CancelOrder {
+  type Err = ParseError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    let cancel = match s {
+      "all" => CancelOrder::All,
+      s => CancelOrder::ById(OrderId::from_str(s)?),
+    };
+    Ok(cancel)
+  }
 }
 
 
@@ -237,14 +264,65 @@ fn order(
 
       Ok(Box::new(fut))
     },
-    Order::Cancel { id } => {
+    Order::Cancel{cancel} => order_cancel(client, cancel),
+    Order::List => order_list(client),
+  }
+}
+
+
+/// Cancel an open order.
+fn order_cancel(
+  client: Client,
+  cancel: CancelOrder,
+) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
+  match cancel {
+    CancelOrder::ById(id) => {
       let fut = client
         .issue::<order::Delete>(id.0)
         .map_err(|e| eprintln!("failed to issue DELETE request to order endpoint: {}", e))?
         .map_err(|e| eprintln!("failed to cancel order: {}", e));
       Ok(Box::new(fut))
     },
-    Order::List => order_list(client),
+    CancelOrder::All => {
+      let request = orders::OrdersReq { limit: 500 };
+      let orders = client
+        .issue::<orders::Get>(request)
+        .map_err(|e| eprintln!("failed to issue GET request to orders endpoint: {}", e))?
+        .map_err(|e| eprintln!("failed to list orders: {}", e));
+
+      let cancels = orders
+        .and_then(move |orders| {
+          let iter = orders
+            .iter()
+            .map(|order| {
+              let result = client
+                .issue::<order::Delete>(order.id)
+                .map_err(|e| {
+                  let id = order.id.to_hyphenated_ref();
+                  eprintln!("failed to issue DELETE request for order {}: {}", id, e)
+                })
+                .map(|req| {
+                  req
+                    .map_err(|e| eprintln!("failed to cancel order: {}", e))
+                });
+
+              // At this point we have a Result<Future<(), ()>, ()> but
+              // really what we want is a Future<(), ()>. So flatten the
+              // result here by merging the error (we want to preserve the
+              // fact that we encountered an error, but we already
+              // printed the error itself).
+              match result {
+                Ok(req) => Either::A(req),
+                Err(e) => Either::B(err(e)),
+              }
+            });
+
+          futures_unordered(iter)
+            .fold_results(Ok(()), |acc, res| acc.and(res))
+        });
+
+      Ok(Box::new(cancels))
+    },
   }
 }
 
