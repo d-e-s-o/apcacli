@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::cmp::max;
+use std::io::stdout;
+use std::io::Write;
+use std::process::exit;
 use std::str::FromStr;
 
 use apca::api::v1::account;
@@ -435,8 +438,7 @@ fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = Str
   Ok(Box::new(fut))
 }
 
-
-fn main() -> Result<(), String> {
+fn run() -> Result<(), String> {
   let opts = Opts::from_args();
   let level = match opts.verbosity {
     0 => LevelFilter::Warn,
@@ -460,4 +462,18 @@ fn main() -> Result<(), String> {
   }?;
 
   block_on_all(future)
+}
+
+fn main() {
+  let result = run();
+  // We exit the process the hard way next, so make sure to flush
+  // buffered content.
+  let _ = stdout().flush();
+  match result {
+    Ok(()) => exit(0),
+    Err(err) => {
+      eprintln!("{}", err);
+      exit(1);
+    },
+  }
 }
