@@ -19,7 +19,7 @@ A command line tool for trading stocks on Alpaca (alpaca.markets).
 """
 
 [dependencies]
-apca = "0.1"
+apca = "0.1.1"
 futures = "0.1"
 futures-ext = "0.1"
 num-decimal = "0.1"

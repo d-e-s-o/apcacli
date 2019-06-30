@@ -7,12 +7,12 @@ use std::io::Write;
 use std::process::exit;
 use std::str::FromStr;
 
-use apca::api::v1::account;
-use apca::api::v1::asset;
-use apca::api::v1::order;
-use apca::api::v1::orders;
-use apca::api::v1::position;
-use apca::api::v1::positions;
+use apca::api::v2::account;
+use apca::api::v2::asset;
+use apca::api::v2::order;
+use apca::api::v2::orders;
+use apca::api::v2::position;
+use apca::api::v2::positions;
 use apca::ApiInfo;
 use apca::Client;
 
@@ -181,24 +181,40 @@ fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()>
     .map_err(|e| eprintln!("failed to retrieve account information: {}", e))
     .and_then(|account| {
       println!(r#"account:
-  id:                {id}
-  status:            {status}
-  buying power:      {buying_power} {currency}
-  cash:              {cash} {currency}
-  withdrawable cash: {withdrawable_cash} {currency}
-  portfolio value:   {portfolio_value} {currency}
-  day trader:        {day_trader}
-  trading blocked:   {trading_blocked}
-  transfers blocked: {transfers_blocked}
-  account blocked:   {account_blocked}"#,
+  id:                 {id}
+  status:             {status}
+  buying power:       {buying_power} {currency}
+  cash:               {cash} {currency}
+  long value:         {value_long} {currency}
+  short value:        {value_short} {currency}
+  equity:             {equity} {currency}
+  last equity:        {last_equity} {currency}
+  margin multiplier:  {multiplier}
+  initial margin:     {initial_margin} {currency}
+  maintenance margin: {maintenance_margin} {currency}
+  day trade count:    {day_trade_count}
+  day trader:         {day_trader}
+  shorting enabled:   {shorting_enabled}
+  trading suspended:  {trading_suspended}
+  trading blocked:    {trading_blocked}
+  transfers blocked:  {transfers_blocked}
+  account blocked:    {account_blocked}"#,
         id = account.id.to_hyphenated_ref(),
         status = format_account_status(account.status),
         currency = account.currency,
         buying_power = account.buying_power,
         cash = account.cash,
-        withdrawable_cash = account.withdrawable_cash,
-        portfolio_value = account.portfolio_value,
+        value_long = account.market_value_long,
+        value_short = account.market_value_short,
+        equity = account.equity,
+        last_equity = account.last_equity,
+        multiplier = account.multiplier,
+        initial_margin = account.initial_margin,
+        maintenance_margin = account.maintenance_margin,
+        day_trade_count = account.daytrade_count,
         day_trader = account.day_trader,
+        shorting_enabled = account.shorting_enabled,
+        trading_suspended = account.trading_suspended,
         trading_blocked = account.trading_blocked,
         transfers_blocked = account.transfers_blocked,
         account_blocked = account.account_blocked,
@@ -252,6 +268,7 @@ fn order(
         time_in_force,
         limit_price,
         stop_price,
+        extended_hours: false,
       };
 
       let fut = client
