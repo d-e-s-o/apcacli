@@ -80,6 +80,11 @@ enum Order {
     /// Create a stop order (or stop limit order) with the given stop price.
     #[structopt(short = "s", long = "stop")]
     stop_price: Option<Num>,
+    /// Create an order that is eligible to execute during
+    /// pre-market/after hours. Note that only limit orders that are
+    /// valid for the day are supported.
+    #[structopt(long = "extended-hours")]
+    extended_hours: bool,
     /// Create an order that is only valid for today.
     #[structopt(long = "today")]
     today: bool,
@@ -238,6 +243,7 @@ fn order(
       quantity,
       limit_price,
       stop_price,
+      extended_hours,
       today,
     } => {
       let side = match side {
@@ -268,7 +274,7 @@ fn order(
         time_in_force,
         limit_price,
         stop_price,
-        extended_hours: false,
+        extended_hours,
       };
 
       let fut = client
