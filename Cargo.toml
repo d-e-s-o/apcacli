@@ -24,6 +24,6 @@ futures = "0.1"
 futures-ext = "0.1"
 num-decimal = "0.1"
 simplelog = "0.5"
-structopt = "0.2"
+structopt = "0.3"
 tokio = {version = "0.1", default-features = false}
 uuid = {version = "0.7", features = ["v4"]}
