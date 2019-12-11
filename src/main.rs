@@ -465,6 +465,37 @@ fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>
       format_percent(&p.unrealized_gain_total_percent).len()
     });
 
+    // We also need to take the total values into consideration for the
+    // maximum width calculation.
+    let today_gain = positions.iter().fold(Num::default(), |acc, p| {
+      acc + &p.unrealized_gain_today
+    });
+    let base_value = positions.iter().fold(Num::default(), |acc, p| {
+      acc + &p.cost_basis
+    });
+    let total_value = positions.iter().fold(Num::default(), |acc, p| {
+      acc + &p.market_value
+    });
+    let total_gain = &total_value - &base_value;
+    let last_value = &total_value - &today_gain;
+    let (last_pct, total_gain_pct) = if base_value.is_zero() {
+      (base_value.clone(), base_value.clone())
+    } else {
+      (
+        &last_value / &base_value - 1,
+        &total_value / &base_value - 1,
+      )
+    };
+    let today_gain_pct = &total_gain_pct - &last_pct;
+
+    let entry_max = max(entry_max, format_price(&base_value).len());
+    let today_max = max(today_max, format_price(&today_gain).len());
+    let today_pct_max = max(today_pct_max, format_percent(&today_gain_pct).len());
+    let total_max = max(total_max, format_price(&total_gain).len());
+    let total_pct_max = max(total_pct_max, format_percent(&total_gain_pct).len());
+
+    // TODO: Strictly speaking we should also take into account the
+    //       length of the formatted current value.
     let position_col = qty_max + 1 + sym_max + 3 + price_max + 1 + currency.len();
     let entry = "Avg Entry";
     let entry_col = max(entry_max + 1 + currency.len(), entry.len());
@@ -509,6 +540,37 @@ fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>
         total_pct_width = total_pct_max,
         total_pct = format_percent(&position.unrealized_gain_total_percent),
       )
+    }
+
+    if !positions.is_empty() {
+      println!(
+        "{empty:->pos_width$}- -{empty:->value_width$}- -\
+         {empty:->today_width$}- -{empty:->total_width$}",
+        empty = "",
+        pos_width = position_col,
+        value_width = entry_col,
+        today_width = today_col,
+        total_width = total_col,
+      );
+      println!(
+        "{value:>value_width$} {currency}   \
+         {base:>base_width$} {currency}   \
+         {today:>today_width$} {currency} ({today_pct:>today_pct_width$}%)   \
+         {total:>total_width$} {currency} ({total_pct:>total_pct_width$}%)",
+        value = format_price(&total_value),
+        value_width = position_col - 1 - currency.len(),
+        currency = currency,
+        base = format_price(&base_value),
+        base_width = entry_max,
+        today = format_price(&today_gain),
+        today_pct = format_percent(&today_gain_pct),
+        today_pct_width = today_pct_max,
+        today_width = today_max,
+        total_width = total_max,
+        total = format_price(&total_gain),
+        total_pct_width = total_pct_max,
+        total_pct = format_percent(&total_gain_pct),
+      );
     }
     ok(())
   });
