@@ -16,12 +16,10 @@ use apca::api::v2::positions;
 use apca::ApiInfo;
 use apca::Client;
 
-use futures::future::Either;
-use futures::future::Future;
-use futures::future::err;
-use futures::future::ok;
-use futures::stream::futures_unordered;
-use futures_ext::StreamExt;
+use futures::future::ready;
+use futures::future::TryFutureExt;
+use futures::stream::FuturesUnordered;
+use futures::stream::StreamExt;
 
 use num_decimal::Num;
 
@@ -31,9 +29,9 @@ use simplelog::SimpleLogger;
 
 use structopt::StructOpt;
 
-use tokio::runtime::current_thread::block_on_all;
+use tokio::runtime::Runtime;
 
-use uuid::parser::ParseError;
+use uuid::Error as UuidError;
 use uuid::Uuid;
 
 
@@ -108,7 +106,7 @@ enum CancelOrder {
 }
 
 impl FromStr for CancelOrder {
-  type Err = ParseError;
+  type Err = UuidError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let cancel = match s {
@@ -148,7 +146,7 @@ impl FromStr for Side {
 struct OrderId(order::Id);
 
 impl FromStr for OrderId {
-  type Err = ParseError;
+  type Err = UuidError;
 
   fn from_str(id: &str) -> Result<Self, Self::Err> {
     Ok(OrderId(order::Id(Uuid::parse_str(id)?)))
@@ -179,13 +177,13 @@ fn format_account_status(status: account::Status) -> String {
 
 
 /// The handler for the 'account' command.
-fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
-  let fut = client
+async fn account(client: Client) -> Result<(), ()> {
+  let account = client
     .issue::<account::Get>(())
-    .map_err(|e| eprintln!("failed to issue GET request to account endpoint: {}", e))?
-    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))
-    .and_then(|account| {
-      println!(r#"account:
+    .await
+    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))?;
+
+  println!(r#"account:
   id:                 {id}
   status:             {status}
   buying power:       {buying_power} {currency}
@@ -204,38 +202,32 @@ fn account(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()>
   trading blocked:    {trading_blocked}
   transfers blocked:  {transfers_blocked}
   account blocked:    {account_blocked}"#,
-        id = account.id.to_hyphenated_ref(),
-        status = format_account_status(account.status),
-        currency = account.currency,
-        buying_power = account.buying_power,
-        cash = account.cash,
-        value_long = account.market_value_long,
-        value_short = account.market_value_short,
-        equity = account.equity,
-        last_equity = account.last_equity,
-        multiplier = account.multiplier,
-        initial_margin = account.initial_margin,
-        maintenance_margin = account.maintenance_margin,
-        day_trade_count = account.daytrade_count,
-        day_trader = account.day_trader,
-        shorting_enabled = account.shorting_enabled,
-        trading_suspended = account.trading_suspended,
-        trading_blocked = account.trading_blocked,
-        transfers_blocked = account.transfers_blocked,
-        account_blocked = account.account_blocked,
-      );
-      ok(())
-    });
-
-  Ok(Box::new(fut))
+    id = account.id.to_hyphenated_ref(),
+    status = format_account_status(account.status),
+    currency = account.currency,
+    buying_power = account.buying_power,
+    cash = account.cash,
+    value_long = account.market_value_long,
+    value_short = account.market_value_short,
+    equity = account.equity,
+    last_equity = account.last_equity,
+    multiplier = account.multiplier,
+    initial_margin = account.initial_margin,
+    maintenance_margin = account.maintenance_margin,
+    day_trade_count = account.daytrade_count,
+    day_trader = account.day_trader,
+    shorting_enabled = account.shorting_enabled,
+    trading_suspended = account.trading_suspended,
+    trading_blocked = account.trading_blocked,
+    transfers_blocked = account.transfers_blocked,
+    account_blocked = account.account_blocked,
+  );
+  Ok(())
 }
 
 
 /// The handler for the 'order' command.
-fn order(
-  client: Client,
-  order: Order,
-) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
+async fn order(client: Client, order: Order) -> Result<(), ()> {
   match order {
     Order::Submit {
       side,
@@ -277,75 +269,49 @@ fn order(
         extended_hours,
       };
 
-      let fut = client
+      let order = client
         .issue::<order::Post>(request)
-        .map_err(|e| eprintln!("failed to issue POST request to order endpoint: {}", e))?
-        .map_err(|e| eprintln!("failed to submit order: {}", e))
-        .and_then(|order| {
-          println!("{}", order.id.to_hyphenated_ref());
-          ok(())
-        });
+        .await
+        .map_err(|e| eprintln!("failed to submit order: {}", e))?;
 
-      Ok(Box::new(fut))
+      println!("{}", order.id.to_hyphenated_ref());
+      Ok(())
     },
-    Order::Cancel{cancel} => order_cancel(client, cancel),
-    Order::List => order_list(client),
+    Order::Cancel { cancel } => order_cancel(client, cancel).await,
+    Order::List => order_list(client).await,
   }
 }
 
 
 /// Cancel an open order.
-fn order_cancel(
-  client: Client,
-  cancel: CancelOrder,
-) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
+async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), ()> {
   match cancel {
     CancelOrder::ById(id) => {
-      let fut = client
+      client
         .issue::<order::Delete>(id.0)
-        .map_err(|e| eprintln!("failed to issue DELETE request to order endpoint: {}", e))?
-        .map_err(|e| eprintln!("failed to cancel order: {}", e));
-      Ok(Box::new(fut))
+        .await
+        .map_err(|e| eprintln!("failed to cancel order: {}", e))
     },
     CancelOrder::All => {
       let request = orders::OrdersReq { limit: 500 };
       let orders = client
         .issue::<orders::Get>(request)
-        .map_err(|e| eprintln!("failed to issue GET request to orders endpoint: {}", e))?
-        .map_err(|e| eprintln!("failed to list orders: {}", e));
+        .await
+        .map_err(|e| eprintln!("failed to list orders: {}", e))?;
 
-      let cancels = orders
-        .and_then(move |orders| {
-          let iter = orders
-            .iter()
-            .map(|order| {
-              let result = client
-                .issue::<order::Delete>(order.id)
-                .map_err(|e| {
-                  let id = order.id.to_hyphenated_ref();
-                  eprintln!("failed to issue DELETE request for order {}: {}", id, e)
-                })
-                .map(|req| {
-                  req
-                    .map_err(|e| eprintln!("failed to cancel order: {}", e))
-                });
-
-              // At this point we have a Result<Future<(), ()>, ()> but
-              // really what we want is a Future<(), ()>. So flatten the
-              // result here by merging the error (we want to preserve the
-              // fact that we encountered an error, but we already
-              // printed the error itself).
-              match result {
-                Ok(req) => Either::A(req),
-                Err(e) => Either::B(err(e)),
-              }
-            });
-
-          futures_unordered(iter)
-            .fold_results(Ok(()), |acc, res| acc.and(res))
-        });
-
-      Ok(Box::new(cancels))
+      orders
+        .into_iter()
+        .map(|order| {
+          client
+            .issue::<order::Delete>(order.id)
+            .map_err(move |e| {
+              let id = order.id.to_hyphenated_ref();
+              eprintln!("failed to cancel order {}: {}", id, e)
+            })
+        })
+        .collect::<FuturesUnordered<_>>()
+        .fold(Ok(()), |acc, res| ready(acc.and(res)))
+        .await
     },
   }
 }
@@ -368,75 +334,67 @@ fn format_quantity(quantity: &Num) -> String {
 
 
 /// List all currently open orders.
-fn order_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
+async fn order_list(client: Client) -> Result<(), ()> {
   let account = client
     .issue::<account::Get>(())
-    .map_err(|e| eprintln!("failed to issue GET request to account endpoint: {}", e))?
-    .map_err(|e| eprintln!("failed to retrieve account information: {}", e));
+    .await
+    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))?;
 
   let request = orders::OrdersReq { limit: 500 };
-  let orders = client
+  let mut orders = client
     .issue::<orders::Get>(request)
-    .map_err(|e| eprintln!("failed to issue GET request to orders endpoint: {}", e))?
-    .map_err(|e| eprintln!("failed to list orders: {}", e));
+    .await
+    .map_err(|e| eprintln!("failed to list orders: {}", e))?;
 
-  let fut = account.join(orders).and_then(|(account, mut orders)| {
-    let currency = account.currency;
+  orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
 
-    orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+  let currency = account.currency;
+  let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
+  let sym_max = max_width(&orders, |p| p.symbol.len());
 
-    let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
-    let sym_max = max_width(&orders, |p| p.symbol.len());
+  for order in orders {
+    let side = match order.side {
+      order::Side::Buy => "buy",
+      order::Side::Sell => "sell",
+    };
+    let price = match (order.limit_price, order.stop_price) {
+      (Some(limit), Some(stop)) => {
+        debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
+        format!("stop @ {} {}, limit @ {} {}", stop, currency, limit, currency)
+      },
+      (Some(limit), None) => {
+        debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
+        format!("limit @ {} {}", limit, currency)
+      },
+      (None, Some(stop)) => {
+        debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
+        format!("stop @ {} {}", stop, currency)
+      },
+      (None, None) => {
+        debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
+        "".to_string()
+      },
+    };
 
-    for order in orders {
-      let side = match order.side {
-        order::Side::Buy => "buy",
-        order::Side::Sell => "sell",
-      };
-      let price = match (order.limit_price, order.stop_price) {
-        (Some(limit), Some(stop)) => {
-          debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
-          format!("stop @ {} {}, limit @ {} {}", stop, currency, limit, currency)
-        },
-        (Some(limit), None) => {
-          debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
-          format!("limit @ {} {}", limit, currency)
-        },
-        (None, Some(stop)) => {
-          debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
-          format!("stop @ {} {}", stop, currency)
-        },
-        (None, None) => {
-          debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
-          "".to_string()
-        },
-      };
-
-      println!(
-        "{id} {side:>4} {qty:>qty_width$} {sym:<sym_width$} {price}",
-        id = order.id.to_hyphenated_ref(),
-        side = side,
-        qty_width = qty_max,
-        qty = format!("{:.0}", order.quantity),
-        sym_width = sym_max,
-        sym = order.symbol,
-        price = price,
-      )
-    }
-    ok(())
-  });
-
-  Ok(Box::new(fut))
+    println!(
+      "{id} {side:>4} {qty:>qty_width$} {sym:<sym_width$} {price}",
+      id = order.id.to_hyphenated_ref(),
+      side = side,
+      qty_width = qty_max,
+      qty = format!("{:.0}", order.quantity),
+      sym_width = sym_max,
+      sym = order.symbol,
+      price = price,
+    )
+  }
+  Ok(())
 }
 
 
 /// The handler for the 'position' command.
-fn position(
-  client: Client,
-  position: Position,
-) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
+async fn position(client: Client, position: Position) -> Result<(), ()> {
   match position {
-    Position::List => position_list(client),
+    Position::List => position_list(client).await,
   }
 }
 
@@ -587,29 +545,25 @@ fn position_print(positions: &[position::Position], currency: &str) {
 }
 
 /// List all currently open positions.
-fn position_list(client: Client) -> Result<Box<dyn Future<Item = (), Error = ()>>, ()> {
+async fn position_list(client: Client) -> Result<(), ()> {
   let account = client
     .issue::<account::Get>(())
-    .map_err(|e| eprintln!("failed to issue GET request to account endpoint: {}", e))?
-    .map_err(|e| eprintln!("failed to retrieve account information: {}", e));
+    .await
+    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))?;
 
-  let positions = client
+  let mut positions = client
     .issue::<positions::Get>(())
-    .map_err(|e| eprintln!("failed to issue GET request to positions endpoint: {}", e))?
-    .map_err(|e| eprintln!("failed to list positions: {}", e));
+    .await
+    .map_err(|e| eprintln!("failed to list positions: {}", e))?;
 
-  let fut = account.join(positions).and_then(|(account, mut positions)| {
-    if !positions.is_empty() {
-      positions.sort_by(|a, b| a.symbol.cmp(&b.symbol));
-      position_print(&positions, &account.currency);
-    }
-    ok(())
-  });
-
-  Ok(Box::new(fut))
+  if !positions.is_empty() {
+    positions.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+    position_print(&positions, &account.currency);
+  }
+  Ok(())
 }
 
-fn run() -> Result<(), ()> {
+async fn run() -> Result<(), ()> {
   let opts = Opts::from_args();
   let level = match opts.verbosity {
     0 => LevelFilter::Warn,
@@ -622,21 +576,18 @@ fn run() -> Result<(), ()> {
   let api_info = ApiInfo::from_env().map_err(|e| {
     eprintln!("failed to retrieve Alpaca environment information: {}", e)
   })?;
-  let client = Client::new(api_info).map_err(|e| {
-    eprintln!("failed to create Alpaca client: {}", e)
-  })?;
+  let client = Client::new(api_info);
 
-  let future = match opts.command {
-    Command::Account => account(client),
-    Command::Order(order) => self::order(client, order),
-    Command::Position(position) => self::position(client, position),
-  }?;
-
-  block_on_all(future)
+  match opts.command {
+    Command::Account => account(client).await,
+    Command::Order(order) => self::order(client, order).await,
+    Command::Position(position) => self::position(client, position).await,
+  }
 }
 
 fn main() {
-  let exit_code = run().map(|_| 0).unwrap_or(1);
+  let mut rt = Runtime::new().unwrap();
+  let exit_code = rt.block_on(run()).map(|_| 0).unwrap_or(1);
   // We exit the process the hard way next, so make sure to flush
   // buffered content.
   let _ = stdout().flush();
