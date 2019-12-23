@@ -60,6 +60,35 @@ enum Command {
 }
 
 
+/// An indication until when an order is valid.
+#[derive(Debug)]
+enum GoodUntil {
+  Today,
+  Canceled,
+}
+
+impl GoodUntil {
+  pub fn to_time_in_force(&self) -> order::TimeInForce {
+    match self {
+      Self::Today => order::TimeInForce::Day,
+      Self::Canceled => order::TimeInForce::UntilCanceled,
+    }
+  }
+}
+
+impl FromStr for GoodUntil {
+  type Err = String;
+
+  fn from_str(src: &str) -> Result<Self, Self::Err> {
+    return match src {
+      "today" => Ok(Self::Today),
+      "canceled" => Ok(Self::Canceled),
+      _ => Err(format!("invalid good-until specifier: {}", src)),
+    }
+  }
+}
+
+
 /// An enumeration representing the `order` command.
 #[derive(Debug, StructOpt)]
 enum Order {
@@ -83,9 +112,9 @@ enum Order {
     /// valid for the day are supported.
     #[structopt(long = "extended-hours")]
     extended_hours: bool,
-    /// Create an order that is only valid for today.
-    #[structopt(long = "today")]
-    today: bool,
+    /// How long the order will remain valid ('today' or 'canceled').
+    #[structopt(short = "u", long = "good-until")]
+    good_until: Option<GoodUntil>,
   },
   /// Cancel a single order (by id) or all open ones (via 'all').
   #[structopt(name = "cancel")]
@@ -236,7 +265,7 @@ async fn order(client: Client, order: Order) -> Result<(), ()> {
       limit_price,
       stop_price,
       extended_hours,
-      today,
+      good_until,
     } => {
       let side = match side {
         Side::Buy => order::Side::Buy,
@@ -250,11 +279,7 @@ async fn order(client: Client, order: Order) -> Result<(), ()> {
         (false, false) => order::Type::Market,
       };
 
-      let time_in_force = if today {
-        order::TimeInForce::Day
-      } else {
-        order::TimeInForce::UntilCanceled
-      };
+      let time_in_force = good_until.unwrap_or(GoodUntil::Canceled).to_time_in_force();
 
       let request = order::OrderReq {
         // TODO: We should probably support other forms of specifying
