@@ -93,9 +93,30 @@ impl FromStr for GoodUntil {
 }
 
 
+#[derive(Clone, Debug, PartialEq)]
+struct Symbol(asset::Symbol);
+
+impl FromStr for Symbol {
+  type Err = String;
+
+  fn from_str(sym: &str) -> Result<Self, Self::Err> {
+    let sym =
+      asset::Symbol::from_str(sym).map_err(|e| format!("failed to parse symbol {}: {}", sym, e))?;
+
+    Ok(Symbol(sym))
+  }
+}
+
+
 /// An enumeration representing the `asset` command.
 #[derive(Debug, StructOpt)]
 enum Asset {
+  /// Query information about a specific asset.
+  #[structopt(name = "get")]
+  Get {
+    /// The asset's symbol or ID.
+    symbol: Symbol,
+  },
   /// List all assets.
   #[structopt(name = "list")]
   List,
@@ -271,8 +292,43 @@ async fn account(client: Client) -> Result<(), ()> {
 /// The handler for the 'asset' command.
 async fn asset(client: Client, asset: Asset) -> Result<(), ()> {
   match asset {
+    Asset::Get { symbol } => asset_get(client, symbol).await,
     Asset::List => asset_list(client).await,
   }
+}
+
+/// Print information about the asset with the given symbol.
+async fn asset_get(client: Client, symbol: Symbol) -> Result<(), ()> {
+  let request = asset::AssetReq {
+    symbol: symbol.0.clone(),
+  };
+  let asset = client.issue::<asset::Get>(request).await.map_err(|e| {
+    eprintln!(
+      "failed to retrieve asset information for {}: {}",
+      symbol.0, e
+    )
+  })?;
+
+  println!(r#"{sym}:
+  id:              {id}
+  asset class:     {cls}
+  exchange:        {exchg}
+  status:          {status}
+  tradable:        {tradable}
+  marginable:      {marginable}
+  shortable:       {shortable}
+  easy-to-borrow:  {easy_to_borrow}"#,
+    sym = asset.symbol,
+    id = asset.id.to_hyphenated_ref(),
+    cls = asset.class.as_ref(),
+    exchg = asset.exchange.as_ref(),
+    status = asset.status.as_ref(),
+    tradable = asset.tradable,
+    marginable = asset.marginable,
+    shortable = asset.shortable,
+    easy_to_borrow = asset.easy_to_borrow,
+  );
+  Ok(())
 }
 
 /// Print all tradable assets.
