@@ -9,6 +9,7 @@ use std::str::FromStr;
 
 use apca::api::v2::account;
 use apca::api::v2::asset;
+use apca::api::v2::assets;
 use apca::api::v2::order;
 use apca::api::v2::orders;
 use apca::api::v2::position;
@@ -51,6 +52,9 @@ enum Command {
   /// Retrieve information about the Alpaca account.
   #[structopt(name = "account")]
   Account,
+  /// Retrieve information pertaining assets.
+  #[structopt(name = "asset")]
+  Asset(Asset),
   /// Perform various order related functions.
   #[structopt(name = "order")]
   Order(Order),
@@ -86,6 +90,15 @@ impl FromStr for GoodUntil {
       _ => Err(format!("invalid good-until specifier: {}", src)),
     }
   }
+}
+
+
+/// An enumeration representing the `asset` command.
+#[derive(Debug, StructOpt)]
+enum Asset {
+  /// List all assets.
+  #[structopt(name = "list")]
+  List,
 }
 
 
@@ -251,6 +264,40 @@ async fn account(client: Client) -> Result<(), ()> {
     transfers_blocked = account.transfers_blocked,
     account_blocked = account.account_blocked,
   );
+  Ok(())
+}
+
+
+/// The handler for the 'asset' command.
+async fn asset(client: Client, asset: Asset) -> Result<(), ()> {
+  match asset {
+    Asset::List => asset_list(client).await,
+  }
+}
+
+/// Print all tradable assets.
+async fn asset_list(client: Client) -> Result<(), ()> {
+  let request = assets::AssetsReq {
+    status: asset::Status::Active,
+    class: asset::Class::UsEquity,
+  };
+  let mut assets = client
+    .issue::<assets::Get>(request)
+    .await
+    .map_err(|e| eprintln!("failed to retrieve asset list: {}", e))?;
+
+  assets.sort_by(|x, y| x.symbol.cmp(&y.symbol));
+
+  let sym_max = max_width(&assets, |a| a.symbol.len());
+
+  for asset in assets.into_iter().filter(|asset| asset.tradable) {
+    println!(
+      "{sym:<sym_width$} {id}",
+      sym = asset.symbol,
+      sym_width = sym_max,
+      id = asset.id.to_hyphenated_ref(),
+    );
+  }
   Ok(())
 }
 
@@ -605,6 +652,7 @@ async fn run() -> Result<(), ()> {
 
   match opts.command {
     Command::Account => account(client).await,
+    Command::Asset(asset) => self::asset(client, asset).await,
     Command::Order(order) => self::order(client, order).await,
     Command::Position(position) => self::position(client, position).await,
   }
