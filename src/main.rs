@@ -1,21 +1,29 @@
 // Copyright (C) 2019-2020 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::borrow::Cow;
 use std::cmp::max;
+use std::convert::TryInto;
 use std::io::stdout;
 use std::io::Write;
 use std::process::exit;
 use std::str::FromStr;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use apca::api::v2::account;
 use apca::api::v2::asset;
 use apca::api::v2::assets;
+use apca::api::v2::clock;
 use apca::api::v2::order;
 use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::ApiInfo;
 use apca::Client;
+
+use chrono::offset::Local;
+use chrono::offset::TimeZone;
 
 use futures::future::ready;
 use futures::future::TryFutureExt;
@@ -55,6 +63,8 @@ enum Command {
   /// Retrieve information pertaining assets.
   #[structopt(name = "asset")]
   Asset(Asset),
+  /// Retrieve status information about the market.
+  Market,
   /// Perform various order related functions.
   #[structopt(name = "order")]
   Order(Order),
@@ -354,6 +364,38 @@ async fn asset_list(client: Client) -> Result<(), ()> {
       id = asset.id.to_hyphenated_ref(),
     );
   }
+  Ok(())
+}
+
+/// Format a system time as per RFC 2822.
+fn format_time(time: &SystemTime) -> Cow<'static, str> {
+  match time.duration_since(UNIX_EPOCH) {
+    Ok(duration) => {
+      let secs = duration.as_secs().try_into().unwrap();
+      let nanos = duration.subsec_nanos();
+      Local.timestamp(secs, nanos).to_rfc2822().into()
+    },
+    Err(..) => "N/A".into(),
+  }
+}
+
+/// Print the current market status.
+async fn market(client: Client) -> Result<(), ()> {
+  let clock = client
+    .issue::<clock::Get>(())
+    .await
+    .map_err(|e| eprintln!("failed to retrieve market clock: {}", e))?;
+
+  println!(r#"market:
+  open:         {open}
+  current time: {current}
+  next open:    {next_open}
+  next close:   {next_close}"#,
+    open = clock.open,
+    current = format_time(&clock.current),
+    next_open = format_time(&clock.next_open),
+    next_close = format_time(&clock.next_close),
+  );
   Ok(())
 }
 
@@ -709,6 +751,7 @@ async fn run() -> Result<(), ()> {
   match opts.command {
     Command::Account => account(client).await,
     Command::Asset(asset) => self::asset(client, asset).await,
+    Command::Market => self::market(client).await,
     Command::Order(order) => self::order(client, order).await,
     Command::Position(position) => self::position(client, position).await,
   }
