@@ -22,6 +22,9 @@ use apca::api::v2::positions;
 use apca::ApiInfo;
 use apca::Client;
 
+use anyhow::Context;
+use anyhow::Error;
+
 use chrono::offset::Local;
 use chrono::offset::TimeZone;
 
@@ -250,11 +253,11 @@ fn format_account_status(status: account::Status) -> String {
 
 
 /// The handler for the 'account' command.
-async fn account(client: Client) -> Result<(), ()> {
+async fn account(client: Client) -> Result<(), Error> {
   let account = client
     .issue::<account::Get>(())
     .await
-    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))?;
+    .with_context(|| "failed to retrieve account information")?;
 
   println!(r#"account:
   id:                 {id}
@@ -300,7 +303,7 @@ async fn account(client: Client) -> Result<(), ()> {
 
 
 /// The handler for the 'asset' command.
-async fn asset(client: Client, asset: Asset) -> Result<(), ()> {
+async fn asset(client: Client, asset: Asset) -> Result<(), Error> {
   match asset {
     Asset::Get { symbol } => asset_get(client, symbol).await,
     Asset::List => asset_list(client).await,
@@ -308,16 +311,14 @@ async fn asset(client: Client, asset: Asset) -> Result<(), ()> {
 }
 
 /// Print information about the asset with the given symbol.
-async fn asset_get(client: Client, symbol: Symbol) -> Result<(), ()> {
+async fn asset_get(client: Client, symbol: Symbol) -> Result<(), Error> {
   let request = asset::AssetReq {
     symbol: symbol.0.clone(),
   };
-  let asset = client.issue::<asset::Get>(request).await.map_err(|e| {
-    eprintln!(
-      "failed to retrieve asset information for {}: {}",
-      symbol.0, e
-    )
-  })?;
+  let asset = client
+    .issue::<asset::Get>(request)
+    .await
+    .with_context(|| format!("failed to retrieve asset information for {}", symbol.0))?;
 
   println!(r#"{sym}:
   id:              {id}
@@ -342,7 +343,7 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<(), ()> {
 }
 
 /// Print all tradable assets.
-async fn asset_list(client: Client) -> Result<(), ()> {
+async fn asset_list(client: Client) -> Result<(), Error> {
   let request = assets::AssetsReq {
     status: asset::Status::Active,
     class: asset::Class::UsEquity,
@@ -350,7 +351,7 @@ async fn asset_list(client: Client) -> Result<(), ()> {
   let mut assets = client
     .issue::<assets::Get>(request)
     .await
-    .map_err(|e| eprintln!("failed to retrieve asset list: {}", e))?;
+    .with_context(|| "failed to retrieve asset list")?;
 
   assets.sort_by(|x, y| x.symbol.cmp(&y.symbol));
 
@@ -380,11 +381,11 @@ fn format_time(time: &SystemTime) -> Cow<'static, str> {
 }
 
 /// Print the current market status.
-async fn market(client: Client) -> Result<(), ()> {
+async fn market(client: Client) -> Result<(), Error> {
   let clock = client
     .issue::<clock::Get>(())
     .await
-    .map_err(|e| eprintln!("failed to retrieve market clock: {}", e))?;
+    .with_context(|| "failed to retrieve market clock")?;
 
   println!(r#"market:
   open:         {open}
@@ -401,7 +402,7 @@ async fn market(client: Client) -> Result<(), ()> {
 
 
 /// The handler for the 'order' command.
-async fn order(client: Client, order: Order) -> Result<(), ()> {
+async fn order(client: Client, order: Order) -> Result<(), Error> {
   match order {
     Order::Submit {
       side,
@@ -442,7 +443,7 @@ async fn order(client: Client, order: Order) -> Result<(), ()> {
       let order = client
         .issue::<order::Post>(request)
         .await
-        .map_err(|e| eprintln!("failed to submit order: {}", e))?;
+        .with_context(|| "failed to submit order")?;
 
       println!("{}", order.id.to_hyphenated_ref());
       Ok(())
@@ -452,32 +453,27 @@ async fn order(client: Client, order: Order) -> Result<(), ()> {
   }
 }
 
-
 /// Cancel an open order.
-async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), ()> {
+async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> {
   match cancel {
-    CancelOrder::ById(id) => {
-      client
-        .issue::<order::Delete>(id.0)
-        .await
-        .map_err(|e| eprintln!("failed to cancel order: {}", e))
-    },
+    CancelOrder::ById(id) => client
+      .issue::<order::Delete>(id.0)
+      .await
+      .with_context(|| "failed to cancel order"),
     CancelOrder::All => {
       let request = orders::OrdersReq { limit: 500 };
       let orders = client
         .issue::<orders::Get>(request)
         .await
-        .map_err(|e| eprintln!("failed to list orders: {}", e))?;
+        .with_context(|| "failed to list orders")?;
 
       orders
         .into_iter()
         .map(|order| {
-          client
-            .issue::<order::Delete>(order.id)
-            .map_err(move |e| {
-              let id = order.id.to_hyphenated_ref();
-              eprintln!("failed to cancel order {}: {}", id, e)
-            })
+          client.issue::<order::Delete>(order.id).map_err(move |e| {
+            let id = order.id.to_hyphenated_ref();
+            Error::new(e).context(format!("failed to cancel order {}", id))
+          })
         })
         .collect::<FuturesUnordered<_>>()
         .fold(Ok(()), |acc, res| ready(acc.and(res)))
@@ -504,17 +500,17 @@ fn format_quantity(quantity: &Num) -> String {
 
 
 /// List all currently open orders.
-async fn order_list(client: Client) -> Result<(), ()> {
+async fn order_list(client: Client) -> Result<(), Error> {
   let account = client
     .issue::<account::Get>(())
     .await
-    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))?;
+    .with_context(|| "failed to retrieve account information")?;
 
   let request = orders::OrdersReq { limit: 500 };
   let mut orders = client
     .issue::<orders::Get>(request)
     .await
-    .map_err(|e| eprintln!("failed to list orders: {}", e))?;
+    .with_context(|| "failed to list orders")?;
 
   orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
 
@@ -562,7 +558,7 @@ async fn order_list(client: Client) -> Result<(), ()> {
 
 
 /// The handler for the 'position' command.
-async fn position(client: Client, position: Position) -> Result<(), ()> {
+async fn position(client: Client, position: Position) -> Result<(), Error> {
   match position {
     Position::List => position_list(client).await,
   }
@@ -715,16 +711,16 @@ fn position_print(positions: &[position::Position], currency: &str) {
 }
 
 /// List all currently open positions.
-async fn position_list(client: Client) -> Result<(), ()> {
+async fn position_list(client: Client) -> Result<(), Error> {
   let account = client
     .issue::<account::Get>(())
     .await
-    .map_err(|e| eprintln!("failed to retrieve account information: {}", e))?;
+    .with_context(|| "failed to retrieve account information")?;
 
   let mut positions = client
     .issue::<positions::Get>(())
     .await
-    .map_err(|e| eprintln!("failed to list positions: {}", e))?;
+    .with_context(|| "failed to list positions")?;
 
   if !positions.is_empty() {
     positions.sort_by(|a, b| a.symbol.cmp(&b.symbol));
@@ -733,7 +729,7 @@ async fn position_list(client: Client) -> Result<(), ()> {
   Ok(())
 }
 
-async fn run() -> Result<(), ()> {
+async fn run() -> Result<(), Error> {
   let opts = Opts::from_args();
   let level = match opts.verbosity {
     0 => LevelFilter::Warn,
@@ -743,9 +739,8 @@ async fn run() -> Result<(), ()> {
   };
 
   let _ = SimpleLogger::init(level, Config::default());
-  let api_info = ApiInfo::from_env().map_err(|e| {
-    eprintln!("failed to retrieve Alpaca environment information: {}", e)
-  })?;
+  let api_info =
+    ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
   let client = Client::new(api_info);
 
   match opts.command {
@@ -759,7 +754,15 @@ async fn run() -> Result<(), ()> {
 
 fn main() {
   let mut rt = Runtime::new().unwrap();
-  let exit_code = rt.block_on(run()).map(|_| 0).unwrap_or(1);
+  let exit_code = rt
+    .block_on(run())
+    .map(|_| 0)
+    .map_err(|e| {
+      eprint!("{}", e);
+      e.chain().skip(1).for_each(|cause| eprint!(": {}", cause));
+      eprintln!();
+    })
+    .unwrap_or(1);
   // We exit the process the hard way next, so make sure to flush
   // buffered content.
   let _ = stdout().flush();
