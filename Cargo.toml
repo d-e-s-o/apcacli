@@ -23,7 +23,7 @@ apca = "0.2.1"
 chrono = {version = "0.4", default-features = false}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
 num-decimal = "0.1"
-simplelog = "0.5"
+simplelog = "0.7"
 structopt = "0.3"
 tokio = {version = "0.2", default-features = false, features = ["rt-core"]}
 uuid = {version = "0.8", features = ["v4"]}
