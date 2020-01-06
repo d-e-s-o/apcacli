@@ -15,6 +15,7 @@ use apca::api::v2::account;
 use apca::api::v2::asset;
 use apca::api::v2::assets;
 use apca::api::v2::clock;
+use apca::api::v2::events;
 use apca::api::v2::order;
 use apca::api::v2::orders;
 use apca::api::v2::position;
@@ -32,6 +33,7 @@ use futures::future::ready;
 use futures::future::TryFutureExt;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
+use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
 
@@ -66,6 +68,8 @@ enum Command {
   /// Retrieve information pertaining assets.
   #[structopt(name = "asset")]
   Asset(Asset),
+  /// Subscribe to some event stream.
+  Events(Events),
   /// Retrieve status information about the market.
   Market,
   /// Perform various order related functions.
@@ -133,6 +137,18 @@ enum Asset {
   /// List all assets.
   #[structopt(name = "list")]
   List,
+}
+
+
+/// An enumeration representing the `events` command.
+#[derive(Debug, StructOpt)]
+enum Events {
+  /// Subscribe to account events.
+  #[structopt(name = "account")]
+  Account,
+  /// Subscribe to trade events.
+  #[structopt(name = "trades")]
+  Trades,
 }
 
 
@@ -380,6 +396,144 @@ fn format_time(time: &SystemTime) -> Cow<'static, str> {
   }
 }
 
+
+async fn stream_account_updates(client: Client) -> Result<(), Error> {
+  client
+    .subscribe::<events::AccountUpdates>()
+    .await
+    .with_context(|| "failed to subscribe to account updates")?
+    .try_for_each(|result| {
+      async {
+        let update = result.unwrap();
+        println!(r#"account update:
+  status:        {status}
+  created at:    {created}
+  updated at:    {updated}
+  deleted at:    {deleted}
+  cash:          {cash} {currency}
+  withdrawable:  {withdrawable} {currency}
+"#,
+          status = update.status,
+          currency = update.currency,
+          created = update
+            .created_at
+            .as_ref()
+            .map(format_time)
+            .unwrap_or_else(|| "N/A".into()),
+          updated = update
+            .updated_at
+            .as_ref()
+            .map(format_time)
+            .unwrap_or_else(|| "N/A".into()),
+          deleted = update
+            .deleted_at
+            .as_ref()
+            .map(format_time)
+            .unwrap_or_else(|| "N/A".into()),
+          cash = update.cash,
+          withdrawable = update.withdrawable_cash,
+        );
+        Ok(())
+      }
+    })
+    .await?;
+
+  Ok(())
+}
+
+
+fn format_trade_status(status: events::TradeStatus) -> &'static str {
+  match status {
+    events::TradeStatus::New => "new",
+    events::TradeStatus::PartialFill => "partially filled",
+    events::TradeStatus::Filled => "filled",
+    events::TradeStatus::DoneForDay => "done for day",
+    events::TradeStatus::Canceled => "canceled",
+    events::TradeStatus::Expired => "expired",
+    events::TradeStatus::PendingCancel => "pending cancel",
+    events::TradeStatus::Stopped => "stopped",
+    events::TradeStatus::Rejected => "rejected",
+    events::TradeStatus::Suspended => "suspended",
+    events::TradeStatus::PendingNew => "pending new",
+    events::TradeStatus::Calculated => "calculated",
+  }
+}
+
+fn format_order_status(status: order::Status) -> &'static str {
+  match status {
+    order::Status::New => "new",
+    order::Status::PartiallyFilled => "partially filled",
+    order::Status::Filled => "filled",
+    order::Status::DoneForDay => "done for day",
+    order::Status::Canceled => "canceled",
+    order::Status::Expired => "expired",
+    order::Status::Accepted => "accepted",
+    order::Status::PendingNew => "pending new",
+    order::Status::AcceptedForBidding => "accepted for bidding",
+    order::Status::PendingCancel => "pending cancel",
+    order::Status::Stopped => "stopped",
+    order::Status::Rejected => "rejected",
+    order::Status::Suspended => "suspended",
+    order::Status::Calculated => "calculated",
+  }
+}
+
+fn format_order_type(type_: order::Type) -> &'static str {
+  match type_ {
+    order::Type::Market => "market",
+    order::Type::Limit => "limit",
+    order::Type::Stop => "stop",
+    order::Type::StopLimit => "stop-limit",
+  }
+}
+
+fn format_order_side(side: order::Side) -> &'static str {
+  match side {
+    order::Side::Buy => "buy",
+    order::Side::Sell => "sell",
+  }
+}
+
+async fn stream_trade_updates(client: Client) -> Result<(), Error> {
+  client
+    .subscribe::<events::TradeUpdates>()
+    .await
+    .with_context(|| "failed to subscribe to trade updates")?
+    .try_for_each(|result| {
+      async {
+        let update = result.unwrap();
+        println!(r#"{symbol} {status}:
+  order id:      {id}
+  status:        {order_status}
+  type:          {type_}
+  side:          {side}
+  quantity:      {quantity}
+  filled:        {filled}
+"#,
+          symbol = update.order.symbol,
+          status = format_trade_status(update.event),
+          id = update.order.id.to_hyphenated_ref(),
+          order_status = format_order_status(update.order.status),
+          type_ = format_order_type(update.order.type_),
+          side = format_order_side(update.order.side),
+          quantity = update.order.quantity.round(),
+          filled = update.order.filled_quantity.round(),
+        );
+        Ok(())
+      }
+    })
+    .await?;
+
+  Ok(())
+}
+
+async fn events(client: Client, events: Events) -> Result<(), Error> {
+  match events {
+    Events::Account => stream_account_updates(client).await,
+    Events::Trades => stream_trade_updates(client).await,
+  }
+}
+
 /// Print the current market status.
 async fn market(client: Client) -> Result<(), Error> {
   let clock = client
@@ -519,10 +673,6 @@ async fn order_list(client: Client) -> Result<(), Error> {
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
   for order in orders {
-    let side = match order.side {
-      order::Side::Buy => "buy",
-      order::Side::Sell => "sell",
-    };
     let price = match (order.limit_price, order.stop_price) {
       (Some(limit), Some(stop)) => {
         debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
@@ -545,7 +695,7 @@ async fn order_list(client: Client) -> Result<(), Error> {
     println!(
       "{id} {side:>4} {qty:>qty_width$} {sym:<sym_width$} {price}",
       id = order.id.to_hyphenated_ref(),
-      side = side,
+      side = format_order_side(order.side),
       qty_width = qty_max,
       qty = format!("{:.0}", order.quantity),
       sym_width = sym_max,
@@ -746,6 +896,7 @@ async fn run() -> Result<(), Error> {
   match opts.command {
     Command::Account => account(client).await,
     Command::Asset(asset) => self::asset(client, asset).await,
+    Command::Events(events) => self::events(client, events).await,
     Command::Market => self::market(client).await,
     Command::Order(order) => self::order(client, order).await,
     Command::Position(position) => self::position(client, position).await,
