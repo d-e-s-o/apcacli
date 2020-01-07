@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 use std::cmp::max;
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::io::stdout;
 use std::io::Write;
 use std::process::exit;
@@ -257,6 +258,12 @@ enum Position {
   /// List all open positions.
   #[structopt(name = "list")]
   List,
+  /// Liquidate a position for a certain asset.
+  #[structopt(name = "close")]
+  Close {
+    /// The position's symbol.
+    symbol: Symbol,
+  },
 }
 
 
@@ -713,6 +720,7 @@ async fn order_list(client: Client) -> Result<(), Error> {
 /// The handler for the 'position' command.
 async fn position(client: Client, position: Position) -> Result<(), Error> {
   match position {
+    Position::Close { symbol } => position_close(client, symbol).await,
     Position::Get { symbol } => position_get(client, symbol).await,
     Position::List => position_list(client).await,
   }
@@ -765,6 +773,52 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
     unrealized_gain_today_pct = format_percent(&position.unrealized_gain_today_percent),
     current_price = format_price(&position.current_price),
     last_price = format_price(&position.last_day_price),
+  );
+
+  Ok(())
+}
+
+
+/// Liquidate a position for a certain asset.
+async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
+  let currency = client
+    .issue::<account::Get>(())
+    .await
+    .with_context(|| "failed to retrieve account information")?
+    .currency;
+
+  let order = client
+    .issue::<position::Delete>(symbol.0.clone())
+    .await
+    .with_context(|| format!("failed to liquidate position for {}", symbol.0))?;
+
+  println!(r#"{sym}:
+  order id:         {id}
+  status:           {status}
+  quantity:         {quantity}
+  filled quantity:  {filled}
+  type:             {type_}
+  side:             {side}
+  limit:            {limit} {currency}
+  stop:             {stop} {currency}"#,
+    sym = order.symbol,
+    id = order.id.to_hyphenated_ref(),
+    status = format_order_status(order.status),
+    quantity = order.quantity,
+    filled = order.filled_quantity,
+    type_ = format_order_type(order.type_),
+    side = format_order_side(order.side),
+    limit = order
+      .limit_price
+      .as_ref()
+      .map(format_price)
+      .unwrap_or_else(|| "N/A".into()),
+    stop = order
+      .stop_price
+      .as_ref()
+      .map(format_price)
+      .unwrap_or_else(|| "N/A".into()),
+    currency = currency,
   );
   Ok(())
 }
