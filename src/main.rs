@@ -328,11 +328,8 @@ async fn asset(client: Client, asset: Asset) -> Result<(), Error> {
 
 /// Print information about the asset with the given symbol.
 async fn asset_get(client: Client, symbol: Symbol) -> Result<(), Error> {
-  let request = asset::AssetReq {
-    symbol: symbol.0.clone(),
-  };
   let asset = client
-    .issue::<asset::Get>(request)
+    .issue::<asset::Get>(symbol.0.clone())
     .await
     .with_context(|| format!("failed to retrieve asset information for {}", symbol.0))?;
 
