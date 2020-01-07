@@ -248,6 +248,12 @@ impl FromStr for OrderId {
 
 #[derive(Debug, StructOpt)]
 enum Position {
+  /// Inquire information about the position holding a specific symbol.
+  #[structopt(name = "get")]
+  Get {
+    /// The position's symbol.
+    symbol: Symbol,
+  },
   /// List all open positions.
   #[structopt(name = "list")]
   List,
@@ -707,8 +713,60 @@ async fn order_list(client: Client) -> Result<(), Error> {
 /// The handler for the 'position' command.
 async fn position(client: Client, position: Position) -> Result<(), Error> {
   match position {
+    Position::Get { symbol } => position_get(client, symbol).await,
     Position::List => position_list(client).await,
   }
+}
+
+fn format_position_side(side: position::Side) -> &'static str {
+  match side {
+    position::Side::Long => "long",
+    position::Side::Short => "short",
+  }
+}
+
+/// Retrieve and print a position for a given symbol.
+async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
+  let currency = client
+    .issue::<account::Get>(())
+    .await
+    .with_context(|| "failed to retrieve account information")?
+    .currency;
+
+  let position = client
+    .issue::<position::Get>(symbol.0.clone())
+    .await
+    .with_context(|| format!("failed to retrieve position for {}", symbol.0))?;
+
+  println!(r#"{sym}:
+  asset id:               {id}
+  exchange:               {exchg}
+  avg entry:              {entry} {currency}
+  quantity:               {qty}
+  side:                   {side}
+  market value:           {value} {currency}
+  cost basis:             {cost_basis} {currency}
+  unrealized gain:        {unrealized_gain} {currency} ({unrealized_gain_pct}%)
+  unrealized gain today:  {unrealized_gain_today} {currency} ({unrealized_gain_today_pct}%)
+  current price:          {current_price} {currency}
+  last price:             {last_price} {currency}"#,
+    sym = position.symbol,
+    id = position.asset_id.to_hyphenated_ref(),
+    exchg = position.exchange.as_ref(),
+    entry = format_price(&position.average_entry_price),
+    currency = currency,
+    qty = position.quantity,
+    side = format_position_side(position.side),
+    value = format_price(&position.market_value),
+    cost_basis = format_price(&position.cost_basis),
+    unrealized_gain = format_price(&position.unrealized_gain_total),
+    unrealized_gain_pct = format_percent(&position.unrealized_gain_total_percent),
+    unrealized_gain_today = format_price(&position.unrealized_gain_today),
+    unrealized_gain_today_pct = format_percent(&position.unrealized_gain_today_percent),
+    current_price = format_price(&position.current_price),
+    last_price = format_price(&position.last_day_price),
+  );
+  Ok(())
 }
 
 
