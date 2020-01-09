@@ -1,6 +1,8 @@
 // Copyright (C) 2019-2020 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#![type_length_limit = "2097152"]
+
 use std::borrow::Cow;
 use std::cmp::max;
 use std::convert::TryInto;
@@ -38,13 +40,14 @@ use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
 
-use simplelog::Config;
-use simplelog::LevelFilter;
-use simplelog::SimpleLogger;
-
 use structopt::StructOpt;
 
 use tokio::runtime::Runtime;
+
+use tracing::subscriber::set_global_default as set_global_subscriber;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::fmt::time::ChronoLocal;
+use tracing_subscriber::FmtSubscriber;
 
 use uuid::Error as UuidError;
 use uuid::Uuid;
@@ -991,13 +994,19 @@ async fn position_list(client: Client) -> Result<(), Error> {
 async fn run() -> Result<(), Error> {
   let opts = Opts::from_args();
   let level = match opts.verbosity {
-    0 => LevelFilter::Warn,
-    1 => LevelFilter::Info,
-    2 => LevelFilter::Debug,
-    _ => LevelFilter::Trace,
+    0 => LevelFilter::WARN,
+    1 => LevelFilter::INFO,
+    2 => LevelFilter::DEBUG,
+    _ => LevelFilter::TRACE,
   };
 
-  let _ = SimpleLogger::init(level, Config::default());
+  let subscriber = FmtSubscriber::builder()
+    .with_max_level(level)
+    .with_timer(ChronoLocal::rfc3339())
+    .finish();
+
+  set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
+
   let api_info =
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
   let client = Client::new(api_info);
