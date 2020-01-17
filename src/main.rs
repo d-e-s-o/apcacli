@@ -205,6 +205,12 @@ enum Order {
   /// Cancel a single order (by id) or all open ones (via 'all').
   #[structopt(name = "cancel")]
   Cancel { cancel: CancelOrder },
+  /// Retrieve information about a single order.
+  #[structopt(name = "get")]
+  Get {
+    /// The ID of the order to retrieve information about.
+    id: OrderId,
+  },
   /// List orders.
   #[structopt(name = "list")]
   List,
@@ -533,6 +539,13 @@ fn format_order_side(side: order::Side) -> &'static str {
   }
 }
 
+fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
+  match time_in_force {
+    order::TimeInForce::Day => "end-of-day",
+    order::TimeInForce::UntilCanceled => "canceled",
+  }
+}
+
 async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
   client
     .subscribe::<events::TradeUpdates>()
@@ -719,6 +732,7 @@ async fn order(client: Client, order: Order) -> Result<(), Error> {
       Ok(())
     },
     Order::Cancel { cancel } => order_cancel(client, cancel).await,
+    Order::Get { id } => order_get(client, id).await,
     Order::List => order_list(client).await,
   }
 }
@@ -750,6 +764,87 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
         .await
     },
   }
+}
+
+
+/// Retrieve information about an order.
+async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
+  let currency = client
+    .issue::<account::Get>(())
+    .await
+    .with_context(|| "failed to retrieve account information")?
+    .currency;
+
+  let order = client
+    .issue::<order::Get>(id.0)
+    .await
+    .with_context(|| "failed to retrieve order information")?;
+
+  println!(r#"{sym}:
+  order id:         {id}
+  status:           {status}
+  created at:       {created}
+  submitted at:     {submitted}
+  updated at:       {updated}
+  filled at:        {filled}
+  expired at:       {expired}
+  canceled at:      {canceled}
+  quantity:         {quantity}
+  filled quantity:  {filled_qty}
+  type:             {type_}
+  side:             {side}
+  good until:       {good_until}
+  limit:            {limit} {currency}
+  stop:             {stop} {currency}
+  extended hours:   {extended_hours}"#,
+    sym = order.symbol,
+    id = order.id.to_hyphenated_ref(),
+    status = format_order_status(order.status),
+    created = format_time(&order.created_at),
+    submitted = order
+      .submitted_at
+      .as_ref()
+      .map(format_time)
+      .unwrap_or_else(|| "N/A".into()),
+    updated = order
+      .updated_at
+      .as_ref()
+      .map(format_time)
+      .unwrap_or_else(|| "N/A".into()),
+    filled = order
+      .filled_at
+      .as_ref()
+      .map(format_time)
+      .unwrap_or_else(|| "N/A".into()),
+    expired = order
+      .expired_at
+      .as_ref()
+      .map(format_time)
+      .unwrap_or_else(|| "N/A".into()),
+    canceled = order
+      .canceled_at
+      .as_ref()
+      .map(format_time)
+      .unwrap_or_else(|| "N/A".into()),
+    quantity = order.quantity,
+    filled_qty = order.filled_quantity,
+    type_ = format_order_type(order.type_),
+    side = format_order_side(order.side),
+    limit = order
+      .limit_price
+      .as_ref()
+      .map(format_price)
+      .unwrap_or_else(|| "N/A".into()),
+    stop = order
+      .stop_price
+      .as_ref()
+      .map(format_price)
+      .unwrap_or_else(|| "N/A".into()),
+    currency = currency,
+    good_until = format_time_in_force(order.time_in_force),
+    extended_hours = order.extended_hours,
+  );
+  Ok(())
 }
 
 
