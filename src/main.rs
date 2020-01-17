@@ -319,15 +319,15 @@ async fn account(client: Client) -> Result<(), Error> {
   println!(r#"account:
   id:                 {id}
   status:             {status}
-  buying power:       {buying_power} {currency}
-  cash:               {cash} {currency}
-  long value:         {value_long} {currency}
-  short value:        {value_short} {currency}
-  equity:             {equity} {currency}
-  last equity:        {last_equity} {currency}
+  buying power:       {buying_power}
+  cash:               {cash}
+  long value:         {value_long}
+  short value:        {value_short}
+  equity:             {equity}
+  last equity:        {last_equity}
   margin multiplier:  {multiplier}
-  initial margin:     {initial_margin} {currency}
-  maintenance margin: {maintenance_margin} {currency}
+  initial margin:     {initial_margin}
+  maintenance margin: {maintenance_margin}
   day trade count:    {day_trade_count}
   day trader:         {day_trader}
   shorting enabled:   {shorting_enabled}
@@ -337,16 +337,15 @@ async fn account(client: Client) -> Result<(), Error> {
   account blocked:    {account_blocked}"#,
     id = account.id.to_hyphenated_ref(),
     status = format_account_status(account.status),
-    currency = account.currency,
-    buying_power = account.buying_power,
-    cash = account.cash,
-    value_long = account.market_value_long,
-    value_short = account.market_value_short,
-    equity = account.equity,
-    last_equity = account.last_equity,
+    buying_power = format_price(&account.buying_power, &account.currency),
+    cash = format_price(&account.cash, &account.currency),
+    value_long = format_price(&account.market_value_long, &account.currency),
+    value_short = format_price(&account.market_value_short, &account.currency),
+    equity = format_price(&account.equity, &account.currency),
+    last_equity = format_price(&account.last_equity, &account.currency),
     multiplier = account.multiplier,
-    initial_margin = account.initial_margin,
-    maintenance_margin = account.maintenance_margin,
+    initial_margin = format_price(&account.initial_margin, &account.currency),
+    maintenance_margin = format_price(&account.maintenance_margin, &account.currency),
     day_trade_count = account.daytrade_count,
     day_trader = account.day_trader,
     shorting_enabled = account.shorting_enabled,
@@ -454,11 +453,10 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
   created at:    {created}
   updated at:    {updated}
   deleted at:    {deleted}
-  cash:          {cash} {currency}
-  withdrawable:  {withdrawable} {currency}
+  cash:          {cash}
+  withdrawable:  {withdrawable}
 "#,
             status = update.status,
-            currency = update.currency,
             created = update
               .created_at
               .as_ref()
@@ -474,8 +472,8 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
               .as_ref()
               .map(format_time)
               .unwrap_or_else(|| "N/A".into()),
-            cash = update.cash,
-            withdrawable = update.withdrawable_cash,
+            cash = format_price(&update.cash, &update.currency),
+            withdrawable = format_price(&update.withdrawable_cash, &update.currency),
           );
         }
         Ok(())
@@ -794,8 +792,8 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
   type:             {type_}
   side:             {side}
   good until:       {good_until}
-  limit:            {limit} {currency}
-  stop:             {stop} {currency}
+  limit:            {limit}
+  stop:             {stop}
   extended hours:   {extended_hours}"#,
     sym = order.symbol,
     id = order.id.to_hyphenated_ref(),
@@ -833,14 +831,13 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
     limit = order
       .limit_price
       .as_ref()
-      .map(format_price)
+      .map(|price| format_price(price, &currency))
       .unwrap_or_else(|| "N/A".into()),
     stop = order
       .stop_price
       .as_ref()
-      .map(format_price)
+      .map(|price| format_price(price, &currency))
       .unwrap_or_else(|| "N/A".into()),
-    currency = currency,
     good_until = format_time_in_force(order.time_in_force),
     extended_hours = order.extended_hours,
   );
@@ -866,10 +863,11 @@ fn format_quantity(quantity: &Num) -> String {
 
 /// List all currently open orders.
 async fn order_list(client: Client) -> Result<(), Error> {
-  let account = client
+  let currency = client
     .issue::<account::Get>(())
     .await
-    .with_context(|| "failed to retrieve account information")?;
+    .with_context(|| "failed to retrieve account information")?
+    .currency;
 
   let request = orders::OrdersReq { limit: 500 };
   let mut orders = client
@@ -879,7 +877,6 @@ async fn order_list(client: Client) -> Result<(), Error> {
 
   orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
 
-  let currency = account.currency;
   let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
@@ -887,15 +884,19 @@ async fn order_list(client: Client) -> Result<(), Error> {
     let price = match (order.limit_price, order.stop_price) {
       (Some(limit), Some(stop)) => {
         debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
-        format!("stop @ {} {}, limit @ {} {}", stop, currency, limit, currency)
+        format!(
+          "stop @ {}, limit @ {}",
+          format_price(&stop, &currency),
+          format_price(&limit, &currency)
+        )
       },
       (Some(limit), None) => {
         debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
-        format!("limit @ {} {}", limit, currency)
+        format!("limit @ {}", format_price(&limit, &currency))
       },
       (None, Some(stop)) => {
         debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
-        format!("stop @ {} {}", stop, currency)
+        format!("stop @ {}", format_price(&stop, &currency))
       },
       (None, None) => {
         debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
@@ -950,30 +951,29 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
   println!(r#"{sym}:
   asset id:               {id}
   exchange:               {exchg}
-  avg entry:              {entry} {currency}
+  avg entry:              {entry}
   quantity:               {qty}
   side:                   {side}
-  market value:           {value} {currency}
-  cost basis:             {cost_basis} {currency}
-  unrealized gain:        {unrealized_gain} {currency} ({unrealized_gain_pct}%)
-  unrealized gain today:  {unrealized_gain_today} {currency} ({unrealized_gain_today_pct}%)
-  current price:          {current_price} {currency}
-  last price:             {last_price} {currency}"#,
+  market value:           {value}
+  cost basis:             {cost_basis}
+  unrealized gain:        {unrealized_gain} ({unrealized_gain_pct}%)
+  unrealized gain today:  {unrealized_gain_today} ({unrealized_gain_today_pct}%)
+  current price:          {current_price}
+  last price:             {last_price}"#,
     sym = position.symbol,
     id = position.asset_id.to_hyphenated_ref(),
     exchg = position.exchange.as_ref(),
-    entry = format_price(&position.average_entry_price),
-    currency = currency,
+    entry = format_price(&position.average_entry_price, &currency),
     qty = position.quantity,
     side = format_position_side(position.side),
-    value = format_price(&position.market_value),
-    cost_basis = format_price(&position.cost_basis),
-    unrealized_gain = format_price(&position.unrealized_gain_total),
+    value = format_price(&position.market_value, &currency),
+    cost_basis = format_price(&position.cost_basis, &currency),
+    unrealized_gain = format_price(&position.unrealized_gain_total, &currency),
     unrealized_gain_pct = format_percent(&position.unrealized_gain_total_percent),
-    unrealized_gain_today = format_price(&position.unrealized_gain_today),
+    unrealized_gain_today = format_price(&position.unrealized_gain_today, &currency),
     unrealized_gain_today_pct = format_percent(&position.unrealized_gain_today_percent),
-    current_price = format_price(&position.current_price),
-    last_price = format_price(&position.last_day_price),
+    current_price = format_price(&position.current_price, &currency),
+    last_price = format_price(&position.last_day_price, &currency),
   );
 
   Ok(())
@@ -1000,8 +1000,8 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
   filled quantity:  {filled}
   type:             {type_}
   side:             {side}
-  limit:            {limit} {currency}
-  stop:             {stop} {currency}"#,
+  limit:            {limit}
+  stop:             {stop}"#,
     sym = order.symbol,
     id = order.id.to_hyphenated_ref(),
     status = format_order_status(order.status),
@@ -1012,24 +1012,21 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
     limit = order
       .limit_price
       .as_ref()
-      .map(format_price)
+      .map(|price| format_price(price, &currency))
       .unwrap_or_else(|| "N/A".into()),
     stop = order
       .stop_price
       .as_ref()
-      .map(format_price)
+      .map(|price| format_price(price, &currency))
       .unwrap_or_else(|| "N/A".into()),
-    currency = currency,
   );
   Ok(())
 }
 
 
 /// Format a price value.
-///
-/// Note that this is really only the actual value without any currency.
-fn format_price(price: &Num) -> String {
-  format!("{:.2}", price)
+fn format_price(price: &Num, currency: &str) -> String {
+  format!("{:.2} {}", price, currency)
 }
 
 
@@ -1046,13 +1043,21 @@ fn format_percent(percent: &Num) -> String {
 fn position_print(positions: &[position::Position], currency: &str) {
   let qty_max = max_width(&positions, |p| format_quantity(&p.quantity).len());
   let sym_max = max_width(&positions, |p| p.symbol.len());
-  let price_max = max_width(&positions, |p| format_price(&p.current_price).len());
-  let entry_max = max_width(&positions, |p| format_price(&p.average_entry_price).len());
-  let today_max = max_width(&positions, |p| format_price(&p.unrealized_gain_today).len());
+  let price_max = max_width(&positions, |p| {
+    format_price(&p.current_price, currency).len()
+  });
+  let entry_max = max_width(&positions, |p| {
+    format_price(&p.average_entry_price, currency).len()
+  });
+  let today_max = max_width(&positions, |p| {
+    format_price(&p.unrealized_gain_today, currency).len()
+  });
   let today_pct_max = max_width(&positions, |p| {
     format_percent(&p.unrealized_gain_today_percent).len()
   });
-  let total_max = max_width(&positions, |p| format_price(&p.unrealized_gain_total).len());
+  let total_max = max_width(&positions, |p| {
+    format_price(&p.unrealized_gain_total, currency).len()
+  });
   let total_pct_max = max_width(&positions, |p| {
     format_percent(&p.unrealized_gain_total_percent).len()
   });
@@ -1080,27 +1085,21 @@ fn position_print(positions: &[position::Position], currency: &str) {
   };
   let today_gain_pct = &total_gain_pct - &last_pct;
 
-  let entry_max = max(entry_max, format_price(&base_value).len());
-  let today_max = max(today_max, format_price(&today_gain).len());
+  let entry_max = max(entry_max, format_price(&base_value, currency).len());
+  let today_max = max(today_max, format_price(&today_gain, currency).len());
   let today_pct_max = max(today_pct_max, format_percent(&today_gain_pct).len());
-  let total_max = max(total_max, format_price(&total_gain).len());
+  let total_max = max(total_max, format_price(&total_gain, currency).len());
   let total_pct_max = max(total_pct_max, format_percent(&total_gain_pct).len());
 
   // TODO: Strictly speaking we should also take into account the
   //       length of the formatted current value.
-  let position_col = qty_max + 1 + sym_max + 3 + price_max + 1 + currency.len();
+  let position_col = qty_max + 1 + sym_max + 3 + price_max;
   let entry = "Avg Entry";
-  let entry_col = max(entry_max + 1 + currency.len(), entry.len());
+  let entry_col = max(entry_max, entry.len());
   let today = "Today P/L";
-  let today_col = max(
-    today_max + 1 + currency.len() + 2 + today_pct_max + 2,
-    today.len(),
-  );
+  let today_col = max(today_max + 2 + today_pct_max + 2, today.len());
   let total = "Total P/L";
-  let total_col = max(
-    total_max + 1 + currency.len() + 2 + total_pct_max + 2,
-    total.len(),
-  );
+  let total_col = max(total_max + 2 + total_pct_max + 2, total.len());
 
   println!(
     "{empty:^pos_width$} | {entry:^entry_width$} | {today:^today_width$} | {total:^total_width$}",
@@ -1116,25 +1115,24 @@ fn position_print(positions: &[position::Position], currency: &str) {
 
   for position in positions {
     println!(
-      "{qty:>qty_width$} {sym:<sym_width$} @ {price:>price_width$.2} {currency} | \
-       {entry:>entry_width$} {currency} | \
-       {today:>today_width$} {currency} ({today_pct:>today_pct_width$}%) | \
-       {total:>total_width$} {currency} ({total_pct:>total_pct_width$}%)",
+      "{qty:>qty_width$} {sym:<sym_width$} @ {price:>price_width$} | \
+       {entry:>entry_width$} | \
+       {today:>today_width$} ({today_pct:>today_pct_width$}%) | \
+       {total:>total_width$} ({total_pct:>total_pct_width$}%)",
       qty_width = qty_max,
       qty = position.quantity,
       sym_width = sym_max,
       sym = position.symbol,
       price_width = price_max,
-      price = position.current_price,
-      currency = currency,
+      price = format_price(&position.current_price, currency),
       entry_width = entry_max,
-      entry = format_price(&position.average_entry_price),
+      entry = format_price(&position.average_entry_price, currency),
       today_width = today_max,
-      today = format_price(&position.unrealized_gain_today),
+      today = format_price(&position.unrealized_gain_today, currency),
       today_pct_width = today_pct_max,
       today_pct = format_percent(&position.unrealized_gain_today_percent),
       total_width = total_max,
-      total = format_price(&position.unrealized_gain_total),
+      total = format_price(&position.unrealized_gain_total, currency),
       total_pct_width = total_pct_max,
       total_pct = format_percent(&position.unrealized_gain_total_percent),
     )
@@ -1150,21 +1148,20 @@ fn position_print(positions: &[position::Position], currency: &str) {
     total_width = total_col,
   );
   println!(
-    "{value:>value_width$} {currency}   \
-     {base:>base_width$} {currency}   \
-     {today:>today_width$} {currency} ({today_pct:>today_pct_width$}%)   \
-     {total:>total_width$} {currency} ({total_pct:>total_pct_width$}%)",
-    value = format_price(&total_value),
-    value_width = position_col - 1 - currency.len(),
-    currency = currency,
-    base = format_price(&base_value),
+    "{value:>value_width$}   \
+     {base:>base_width$}   \
+     {today:>today_width$} ({today_pct:>today_pct_width$}%)   \
+     {total:>total_width$} ({total_pct:>total_pct_width$}%)",
+    value = format_price(&total_value, currency),
+    value_width = position_col,
+    base = format_price(&base_value, currency),
     base_width = entry_max,
-    today = format_price(&today_gain),
+    today = format_price(&today_gain, currency),
     today_pct = format_percent(&today_gain_pct),
     today_pct_width = today_pct_max,
     today_width = today_max,
     total_width = total_max,
-    total = format_price(&total_gain),
+    total = format_price(&total_gain, currency),
     total_pct_width = total_pct_max,
     total_pct = format_percent(&total_gain_pct),
   );
