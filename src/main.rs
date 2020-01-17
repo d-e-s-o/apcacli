@@ -42,6 +42,8 @@ use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
 
+use serde_json::to_string as to_json;
+
 use structopt::clap::ArgGroup;
 use structopt::StructOpt;
 
@@ -147,15 +149,25 @@ enum Asset {
 }
 
 
-/// An enumeration representing the `events` command.
+/// The type of event to stream.
 #[derive(Debug, StructOpt)]
-enum Events {
+enum EventType {
   /// Subscribe to account events.
   #[structopt(name = "account")]
   Account,
   /// Subscribe to trade events.
   #[structopt(name = "trades")]
   Trades,
+}
+
+/// A struct representing the `events` command.
+#[derive(Debug, StructOpt)]
+struct Events {
+  #[structopt(flatten)]
+  event: EventType,
+  /// Print events in JSON format.
+  #[structopt(short = "j", long = "json")]
+  json: bool,
 }
 
 
@@ -417,15 +429,21 @@ fn format_time(time: &SystemTime) -> Cow<'static, str> {
 }
 
 
-async fn stream_account_updates(client: Client) -> Result<(), Error> {
+async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error> {
   client
     .subscribe::<events::AccountUpdates>()
     .await
     .with_context(|| "failed to subscribe to account updates")?
+    .map_err(Error::from)
     .try_for_each(|result| {
       async {
         let update = result.unwrap();
-        println!(r#"account update:
+        if json {
+          let json =
+            to_json(&update).with_context(|| "failed to serialize account update to JSON")?;
+          println!("{}", json);
+        } else {
+          println!(r#"account update:
   status:        {status}
   created at:    {created}
   updated at:    {updated}
@@ -433,26 +451,27 @@ async fn stream_account_updates(client: Client) -> Result<(), Error> {
   cash:          {cash} {currency}
   withdrawable:  {withdrawable} {currency}
 "#,
-          status = update.status,
-          currency = update.currency,
-          created = update
-            .created_at
-            .as_ref()
-            .map(format_time)
-            .unwrap_or_else(|| "N/A".into()),
-          updated = update
-            .updated_at
-            .as_ref()
-            .map(format_time)
-            .unwrap_or_else(|| "N/A".into()),
-          deleted = update
-            .deleted_at
-            .as_ref()
-            .map(format_time)
-            .unwrap_or_else(|| "N/A".into()),
-          cash = update.cash,
-          withdrawable = update.withdrawable_cash,
-        );
+            status = update.status,
+            currency = update.currency,
+            created = update
+              .created_at
+              .as_ref()
+              .map(format_time)
+              .unwrap_or_else(|| "N/A".into()),
+            updated = update
+              .updated_at
+              .as_ref()
+              .map(format_time)
+              .unwrap_or_else(|| "N/A".into()),
+            deleted = update
+              .deleted_at
+              .as_ref()
+              .map(format_time)
+              .unwrap_or_else(|| "N/A".into()),
+            cash = update.cash,
+            withdrawable = update.withdrawable_cash,
+          );
+        }
         Ok(())
       }
     })
@@ -514,15 +533,21 @@ fn format_order_side(side: order::Side) -> &'static str {
   }
 }
 
-async fn stream_trade_updates(client: Client) -> Result<(), Error> {
+async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
   client
     .subscribe::<events::TradeUpdates>()
     .await
     .with_context(|| "failed to subscribe to trade updates")?
+    .map_err(Error::from)
     .try_for_each(|result| {
       async {
         let update = result.unwrap();
-        println!(r#"{symbol} {status}:
+        if json {
+          let json =
+            to_json(&update).with_context(|| "failed to serialize trade update to JSON")?;
+          println!("{}", json);
+        } else {
+          println!(r#"{symbol} {status}:
   order id:      {id}
   status:        {order_status}
   type:          {type_}
@@ -530,15 +555,16 @@ async fn stream_trade_updates(client: Client) -> Result<(), Error> {
   quantity:      {quantity}
   filled:        {filled}
 "#,
-          symbol = update.order.symbol,
-          status = format_trade_status(update.event),
-          id = update.order.id.to_hyphenated_ref(),
-          order_status = format_order_status(update.order.status),
-          type_ = format_order_type(update.order.type_),
-          side = format_order_side(update.order.side),
-          quantity = update.order.quantity.round(),
-          filled = update.order.filled_quantity.round(),
-        );
+            symbol = update.order.symbol,
+            status = format_trade_status(update.event),
+            id = update.order.id.to_hyphenated_ref(),
+            order_status = format_order_status(update.order.status),
+            type_ = format_order_type(update.order.type_),
+            side = format_order_side(update.order.side),
+            quantity = update.order.quantity.round(),
+            filled = update.order.filled_quantity.round(),
+          );
+        }
         Ok(())
       }
     })
@@ -548,9 +574,9 @@ async fn stream_trade_updates(client: Client) -> Result<(), Error> {
 }
 
 async fn events(client: Client, events: Events) -> Result<(), Error> {
-  match events {
-    Events::Account => stream_account_updates(client).await,
-    Events::Trades => stream_trade_updates(client).await,
+  match events.event {
+    EventType::Account => stream_account_updates(client, events.json).await,
+    EventType::Trades => stream_trade_updates(client, events.json).await,
   }
 }
 
