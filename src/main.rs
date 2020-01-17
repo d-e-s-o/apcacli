@@ -877,6 +877,7 @@ async fn order_list(client: Client) -> Result<(), Error> {
 
   orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
 
+  let side_max = max_width(&orders, |p| format_order_side(p.side).len());
   let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
@@ -905,8 +906,9 @@ async fn order_list(client: Client) -> Result<(), Error> {
     };
 
     println!(
-      "{id} {side:>4} {qty:>qty_width$} {sym:<sym_width$} {price}",
+      "{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {price}",
       id = order.id.to_hyphenated_ref(),
+      side_width = side_max,
       side = format_order_side(order.side),
       qty_width = qty_max,
       qty = format!("{:.0}", order.quantity),
