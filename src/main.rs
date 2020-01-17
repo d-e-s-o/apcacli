@@ -956,8 +956,8 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
   side:                   {side}
   market value:           {value}
   cost basis:             {cost_basis}
-  unrealized gain:        {unrealized_gain} ({unrealized_gain_pct}%)
-  unrealized gain today:  {unrealized_gain_today} ({unrealized_gain_today_pct}%)
+  unrealized gain:        {unrealized_gain} ({unrealized_gain_pct})
+  unrealized gain today:  {unrealized_gain_today} ({unrealized_gain_today_pct})
   current price:          {current_price}
   last price:             {last_price}"#,
     sym = position.symbol,
@@ -1031,12 +1031,8 @@ fn format_price(price: &Num, currency: &str) -> String {
 
 
 /// Format a percentage value.
-///
-/// Note that this is really only the actual value, the percent sign is
-/// omitted because clients may need to know size of the actual value
-/// only.
 fn format_percent(percent: &Num) -> String {
-  format!("{:.2}", percent * 100)
+  format!("{:.2}%", percent * 100)
 }
 
 /// Print a table with the given positions.
@@ -1097,9 +1093,9 @@ fn position_print(positions: &[position::Position], currency: &str) {
   let entry = "Avg Entry";
   let entry_col = max(entry_max, entry.len());
   let today = "Today P/L";
-  let today_col = max(today_max + 2 + today_pct_max + 2, today.len());
+  let today_col = max(today_max + 2 + today_pct_max + 1, today.len());
   let total = "Total P/L";
-  let total_col = max(total_max + 2 + total_pct_max + 2, total.len());
+  let total_col = max(total_max + 2 + total_pct_max + 1, total.len());
 
   println!(
     "{empty:^pos_width$} | {entry:^entry_width$} | {today:^today_width$} | {total:^total_width$}",
@@ -1117,8 +1113,8 @@ fn position_print(positions: &[position::Position], currency: &str) {
     println!(
       "{qty:>qty_width$} {sym:<sym_width$} @ {price:>price_width$} | \
        {entry:>entry_width$} | \
-       {today:>today_width$} ({today_pct:>today_pct_width$}%) | \
-       {total:>total_width$} ({total_pct:>total_pct_width$}%)",
+       {today:>today_width$} ({today_pct:>today_pct_width$}) | \
+       {total:>total_width$} ({total_pct:>total_pct_width$})",
       qty_width = qty_max,
       qty = position.quantity,
       sym_width = sym_max,
@@ -1150,8 +1146,8 @@ fn position_print(positions: &[position::Position], currency: &str) {
   println!(
     "{value:>value_width$}   \
      {base:>base_width$}   \
-     {today:>today_width$} ({today_pct:>today_pct_width$}%)   \
-     {total:>total_width$} ({total_pct:>total_pct_width$}%)",
+     {today:>today_width$} ({today_pct:>today_pct_width$})   \
+     {total:>total_width$} ({total_pct:>total_pct_width$})",
     value = format_price(&total_value, currency),
     value_width = position_col,
     base = format_price(&base_value, currency),
