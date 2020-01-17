@@ -23,9 +23,11 @@ use apca::api::v2::order;
 use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
+use apca::data::v1::bars;
 use apca::ApiInfo;
 use apca::Client;
 
+use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
 
@@ -40,6 +42,7 @@ use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
 
+use structopt::clap::ArgGroup;
 use structopt::StructOpt;
 
 use tokio::runtime::Runtime;
@@ -160,14 +163,18 @@ enum Events {
 #[derive(Debug, StructOpt)]
 enum Order {
   /// Submit an order.
-  #[structopt(name = "submit")]
+  #[structopt(name = "submit", group = ArgGroup::with_name("amount").required(true))]
   Submit {
     /// The side of the order.
     side: Side,
     /// The symbol of the asset involved in the order.
     symbol: String,
     /// The quantity to trade.
-    quantity: u64,
+    #[structopt(long = "quantity", group = "amount")]
+    quantity: Option<u64>,
+    /// The value to trade.
+    #[structopt(long = "value", group = "amount")]
+    value: Option<Num>,
     /// Create a limit order (or stop limit order) with the given limit price.
     #[structopt(short = "l", long = "limit")]
     limit_price: Option<Num>,
@@ -568,6 +575,63 @@ async fn market(client: Client) -> Result<(), Error> {
 }
 
 
+/// Convert a certain monetary value into the maximum number of shares
+/// purchasable (i.e., a quantity).
+async fn value_to_quantity(
+  client: &Client,
+  symbol: &str,
+  value: &Num,
+  price: Option<Num>,
+) -> Result<u64, Error> {
+  let price = match price {
+    Some(price) => Ok(price),
+    None => {
+      let request = bars::BarReq {
+        symbol: symbol.to_string(),
+        limit: 1,
+        end: None,
+      };
+
+      let mut response = client
+        .issue::<bars::Get>((bars::TimeFrame::OneMinute, request))
+        .await
+        .with_context(|| format!("failed to retrieve current market value of {}", symbol))?;
+
+      if let Some(bars) = response.get_mut(symbol) {
+        if bars.len() == 1 {
+          // We use the last close price as our reference to infer the
+          // number of stocks to purchase from.
+          let bars::Bar { close, .. } = bars.remove(0);
+          Ok(close)
+        } else {
+          Err(anyhow!(
+            "market data response for {} contained unexpected number of bars: {}",
+            symbol,
+            bars.len()
+          ))
+        }
+      } else {
+        Err(anyhow!(
+          "market data for {} not present in response",
+          symbol
+        ))
+      }
+    },
+  }?;
+
+  // We `round` as opposed to `trunc` to have a little less bias in
+  // there and in an attempt to treat short orders equally.
+  let amount = (value / price).round();
+  let amount = amount
+    .to_i64()
+    .ok_or_else(|| anyhow!("calculated amount {} is not a valid 64 bit integer"))?;
+  let amount = amount
+    .try_into()
+    .with_context(|| format!("amount {} is not unsigned", amount))?;
+  Ok(amount)
+}
+
+
 /// The handler for the 'order' command.
 async fn order(client: Client, order: Order) -> Result<(), Error> {
   match order {
@@ -575,6 +639,7 @@ async fn order(client: Client, order: Order) -> Result<(), Error> {
       side,
       symbol,
       quantity,
+      value,
       limit_price,
       stop_price,
       extended_hours,
@@ -583,6 +648,18 @@ async fn order(client: Client, order: Order) -> Result<(), Error> {
       let side = match side {
         Side::Buy => order::Side::Buy,
         Side::Sell => order::Side::Sell,
+      };
+
+      let quantity = match quantity {
+        Some(quantity) => quantity,
+        None => {
+          // `value` is guaranteed to be `Some` here as `clap` ensures
+          // this constraint.
+          let value = value.unwrap();
+          value_to_quantity(&client, &symbol, &value, limit_price.clone())
+            .await
+            .with_context(|| format!("unable to convert value to quantity"))?
+        },
       };
 
       let type_ = match (limit_price.is_some(), stop_price.is_some()) {
