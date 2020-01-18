@@ -882,22 +882,31 @@ async fn order_list(client: Client) -> Result<(), Error> {
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
   for order in orders {
-    let price = match (order.limit_price, order.stop_price) {
+    let summary = match (order.limit_price, order.stop_price) {
       (Some(limit), Some(stop)) => {
         debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
         format!(
-          "stop @ {}, limit @ {}",
+          "stop @ {}, limit @ {} = {}",
           format_price(&stop, &currency),
-          format_price(&limit, &currency)
+          format_price(&limit, &currency),
+          format_price(&(&limit * &order.quantity), &currency)
         )
       },
       (Some(limit), None) => {
         debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
-        format!("limit @ {}", format_price(&limit, &currency))
+        format!(
+          "limit @ {} = {}",
+          format_price(&limit, &currency),
+          format_price(&(limit * &order.quantity), &currency)
+        )
       },
       (None, Some(stop)) => {
         debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
-        format!("stop @ {}", format_price(&stop, &currency))
+        format!(
+          "stop @ {} = {}",
+          format_price(&stop, &currency),
+          format_price(&(stop * &order.quantity), &currency)
+        )
       },
       (None, None) => {
         debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
@@ -906,7 +915,7 @@ async fn order_list(client: Client) -> Result<(), Error> {
     };
 
     println!(
-      "{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {price}",
+      "{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
       id = order.id.to_hyphenated_ref(),
       side_width = side_max,
       side = format_order_side(order.side),
@@ -914,7 +923,7 @@ async fn order_list(client: Client) -> Result<(), Error> {
       qty = format!("{:.0}", order.quantity),
       sym_width = sym_max,
       sym = order.symbol,
-      price = price,
+      summary = summary,
     )
   }
   Ok(())
