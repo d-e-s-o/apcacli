@@ -1053,6 +1053,9 @@ fn position_print(positions: &[position::Position], currency: &str) {
   let price_max = max_width(&positions, |p| {
     format_price(&p.current_price, currency).len()
   });
+  let value_max = max_width(&positions, |p| {
+    format_price(&p.market_value, currency).len()
+  });
   let entry_max = max_width(&positions, |p| {
     format_price(&p.average_entry_price, currency).len()
   });
@@ -1100,7 +1103,7 @@ fn position_print(positions: &[position::Position], currency: &str) {
 
   // TODO: Strictly speaking we should also take into account the
   //       length of the formatted current value.
-  let position_col = qty_max + 1 + sym_max + 3 + price_max;
+  let position_col = qty_max + 1 + sym_max + 3 + price_max + 3 + value_max;
   let entry = "Avg Entry";
   let entry_col = max(entry_max, entry.len());
   let today = "Today P/L";
@@ -1122,7 +1125,7 @@ fn position_print(positions: &[position::Position], currency: &str) {
 
   for position in positions {
     println!(
-      "{qty:>qty_width$} {sym:<sym_width$} @ {price:>price_width$} | \
+      "{qty:>qty_width$} {sym:<sym_width$} @ {price:>price_width$} = {value:>value_width$} | \
        {entry:>entry_width$} | \
        {today:>today_width$} ({today_pct:>today_pct_width$}) | \
        {total:>total_width$} ({total_pct:>total_pct_width$})",
@@ -1132,6 +1135,8 @@ fn position_print(positions: &[position::Position], currency: &str) {
       sym = position.symbol,
       price_width = price_max,
       price = format_price(&position.current_price, currency),
+      value_width = value_max,
+      value = format_price(&position.market_value, currency),
       entry_width = entry_max,
       entry = format_price(&position.average_entry_price, currency),
       today_width = today_max,
