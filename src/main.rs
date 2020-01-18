@@ -57,6 +57,8 @@ use tracing_subscriber::FmtSubscriber;
 use uuid::Error as UuidError;
 use uuid::Uuid;
 
+use yansi::Paint;
+
 
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
@@ -979,10 +981,10 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
     side = format_position_side(position.side),
     value = format_price(&position.market_value, &currency),
     cost_basis = format_price(&position.cost_basis, &currency),
-    unrealized_gain = format_price(&position.unrealized_gain_total, &currency),
-    unrealized_gain_pct = format_percent(&position.unrealized_gain_total_percent),
-    unrealized_gain_today = format_price(&position.unrealized_gain_today, &currency),
-    unrealized_gain_today_pct = format_percent(&position.unrealized_gain_today_percent),
+    unrealized_gain = format_gain(&position.unrealized_gain_total, &currency),
+    unrealized_gain_pct = format_percent_gain(&position.unrealized_gain_total_percent),
+    unrealized_gain_today = format_gain(&position.unrealized_gain_today, &currency),
+    unrealized_gain_today_pct = format_percent_gain(&position.unrealized_gain_today_percent),
     current_price = format_price(&position.current_price, &currency),
     last_price = format_price(&position.last_day_price, &currency),
   );
@@ -1040,10 +1042,33 @@ fn format_price(price: &Num, currency: &str) -> String {
   format!("{:.2} {}", price, currency)
 }
 
+fn format_colored<F>(value: &Num, format: F) -> Paint<String>
+where
+  F: Fn(&Num) -> String,
+{
+  if value.is_positive() {
+    Paint::rgb(0x00, 0x70, 0x00, format(value))
+  } else if value.is_negative() {
+    Paint::red(format(value))
+  } else {
+    Paint::black(format(value))
+  }
+}
+
+/// Format gain.
+fn format_gain(price: &Num, currency: &str) -> Paint<String> {
+  format_colored(price, |price| format_price(price, currency))
+}
+
 
 /// Format a percentage value.
 fn format_percent(percent: &Num) -> String {
   format!("{:.2}%", percent * 100)
+}
+
+/// Format percent gain.
+fn format_percent_gain(percent: &Num) -> Paint<String> {
+  format_colored(percent, format_percent)
 }
 
 /// Print a table with the given positions.
@@ -1140,13 +1165,13 @@ fn position_print(positions: &[position::Position], currency: &str) {
       entry_width = entry_max,
       entry = format_price(&position.average_entry_price, currency),
       today_width = today_max,
-      today = format_price(&position.unrealized_gain_today, currency),
+      today = format_gain(&position.unrealized_gain_today, currency),
       today_pct_width = today_pct_max,
-      today_pct = format_percent(&position.unrealized_gain_today_percent),
+      today_pct = format_percent_gain(&position.unrealized_gain_today_percent),
       total_width = total_max,
-      total = format_price(&position.unrealized_gain_total, currency),
+      total = format_gain(&position.unrealized_gain_total, currency),
       total_pct_width = total_pct_max,
-      total_pct = format_percent(&position.unrealized_gain_total_percent),
+      total_pct = format_percent_gain(&position.unrealized_gain_total_percent),
     )
   }
 
@@ -1168,14 +1193,14 @@ fn position_print(positions: &[position::Position], currency: &str) {
     value_width = position_col,
     base = format_price(&base_value, currency),
     base_width = entry_max,
-    today = format_price(&today_gain, currency),
-    today_pct = format_percent(&today_gain_pct),
+    today = format_gain(&today_gain, currency),
+    today_pct = format_percent_gain(&today_gain_pct),
     today_pct_width = today_pct_max,
     today_width = today_max,
     total_width = total_max,
-    total = format_price(&total_gain, currency),
+    total = format_gain(&total_gain, currency),
     total_pct_width = total_pct_max,
-    total_pct = format_percent(&total_gain_pct),
+    total_pct = format_percent_gain(&total_gain_pct),
   );
 }
 
