@@ -543,6 +543,8 @@ fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
   match time_in_force {
     order::TimeInForce::Day => "end-of-day",
     order::TimeInForce::UntilCanceled => "canceled",
+    order::TimeInForce::UntilMarketOpen => "market open",
+    order::TimeInForce::UntilMarketClose => "market close",
   }
 }
 
