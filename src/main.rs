@@ -97,6 +97,8 @@ enum Command {
 enum GoodUntil {
   Today,
   Canceled,
+  MarketOpen,
+  MarketClose,
 }
 
 impl GoodUntil {
@@ -104,6 +106,8 @@ impl GoodUntil {
     match self {
       Self::Today => order::TimeInForce::Day,
       Self::Canceled => order::TimeInForce::UntilCanceled,
+      Self::MarketOpen => order::TimeInForce::UntilMarketOpen,
+      Self::MarketClose => order::TimeInForce::UntilMarketClose,
     }
   }
 }
@@ -115,6 +119,8 @@ impl FromStr for GoodUntil {
     return match src {
       "today" => Ok(Self::Today),
       "canceled" => Ok(Self::Canceled),
+      "market-open" => Ok(Self::MarketOpen),
+      "market-close" => Ok(Self::MarketClose),
       _ => Err(format!("invalid good-until specifier: {}", src)),
     }
   }
@@ -200,7 +206,8 @@ enum Order {
     /// valid for the day are supported.
     #[structopt(long = "extended-hours")]
     extended_hours: bool,
-    /// How long the order will remain valid ('today' or 'canceled').
+    /// How long the order will remain valid ('today', 'canceled',
+    /// 'market-open', or 'market-close').
     #[structopt(short = "u", long = "good-until")]
     good_until: Option<GoodUntil>,
   },
