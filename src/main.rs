@@ -208,8 +208,8 @@ enum Order {
     extended_hours: bool,
     /// How long the order will remain valid ('today', 'canceled',
     /// 'market-open', or 'market-close').
-    #[structopt(short = "u", long = "good-until")]
-    good_until: Option<GoodUntil>,
+    #[structopt(short = "u", long = "good-until", default_value = "canceled")]
+    good_until: GoodUntil,
   },
   /// Cancel a single order (by id) or all open ones (via 'all').
   #[structopt(name = "cancel")]
@@ -717,7 +717,7 @@ async fn order(client: Client, order: Order) -> Result<(), Error> {
         (false, false) => order::Type::Market,
       };
 
-      let time_in_force = good_until.unwrap_or(GoodUntil::Canceled).to_time_in_force();
+      let time_in_force = good_until.to_time_in_force();
 
       let request = order::OrderReq {
         // TODO: We should probably support other forms of specifying
