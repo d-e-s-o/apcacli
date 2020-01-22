@@ -178,39 +178,12 @@ struct Events {
   json: bool,
 }
 
-
 /// An enumeration representing the `order` command.
 #[derive(Debug, StructOpt)]
 enum Order {
   /// Submit an order.
   #[structopt(name = "submit", group = ArgGroup::with_name("amount").required(true))]
-  Submit {
-    /// The side of the order.
-    side: Side,
-    /// The symbol of the asset involved in the order.
-    symbol: String,
-    /// The quantity to trade.
-    #[structopt(long = "quantity", group = "amount")]
-    quantity: Option<u64>,
-    /// The value to trade.
-    #[structopt(long = "value", group = "amount")]
-    value: Option<Num>,
-    /// Create a limit order (or stop limit order) with the given limit price.
-    #[structopt(short = "l", long = "limit")]
-    limit_price: Option<Num>,
-    /// Create a stop order (or stop limit order) with the given stop price.
-    #[structopt(short = "s", long = "stop")]
-    stop_price: Option<Num>,
-    /// Create an order that is eligible to execute during
-    /// pre-market/after hours. Note that only limit orders that are
-    /// valid for the day are supported.
-    #[structopt(long = "extended-hours")]
-    extended_hours: bool,
-    /// How long the order will remain valid ('today', 'canceled',
-    /// 'market-open', or 'market-close').
-    #[structopt(short = "u", long = "good-until", default_value = "canceled")]
-    good_until: GoodUntil,
-  },
+  Submit(SubmitOrder),
   /// Cancel a single order (by id) or all open ones (via 'all').
   #[structopt(name = "cancel")]
   Cancel { cancel: CancelOrder },
@@ -223,6 +196,37 @@ enum Order {
   /// List orders.
   #[structopt(name = "list")]
   List,
+}
+
+
+/// A type representing the options to submit an order.
+#[derive(Debug, StructOpt)]
+struct SubmitOrder {
+  /// The side of the order.
+  side: Side,
+  /// The symbol of the asset involved in the order.
+  symbol: String,
+  /// The quantity to trade.
+  #[structopt(long = "quantity", group = "amount")]
+  quantity: Option<u64>,
+  /// The value to trade.
+  #[structopt(long = "value", group = "amount")]
+  value: Option<Num>,
+  /// Create a limit order (or stop limit order) with the given limit price.
+  #[structopt(short = "l", long = "limit")]
+  limit_price: Option<Num>,
+  /// Create a stop order (or stop limit order) with the given stop price.
+  #[structopt(short = "s", long = "stop")]
+  stop_price: Option<Num>,
+  /// Create an order that is eligible to execute during
+  /// pre-market/after hours. Note that only limit orders that are
+  /// valid for the day are supported.
+  #[structopt(long = "extended-hours")]
+  extended_hours: bool,
+  /// How long the order will remain valid ('today', 'canceled',
+  /// 'market-open', or 'market-close').
+  #[structopt(short = "u", long = "good-until", default_value = "canceled")]
+  good_until: GoodUntil,
 }
 
 
@@ -683,68 +687,75 @@ async fn value_to_quantity(
 /// The handler for the 'order' command.
 async fn order(client: Client, order: Order) -> Result<(), Error> {
   match order {
-    Order::Submit {
-      side,
-      symbol,
-      quantity,
-      value,
-      limit_price,
-      stop_price,
-      extended_hours,
-      good_until,
-    } => {
-      let side = match side {
-        Side::Buy => order::Side::Buy,
-        Side::Sell => order::Side::Sell,
-      };
-
-      let quantity = match quantity {
-        Some(quantity) => quantity,
-        None => {
-          // `value` is guaranteed to be `Some` here as `clap` ensures
-          // this constraint.
-          let value = value.unwrap();
-          value_to_quantity(&client, &symbol, &value, limit_price.clone())
-            .await
-            .with_context(|| format!("unable to convert value to quantity"))?
-        },
-      };
-
-      let type_ = match (limit_price.is_some(), stop_price.is_some()) {
-        (true, true) => order::Type::StopLimit,
-        (true, false) => order::Type::Limit,
-        (false, true) => order::Type::Stop,
-        (false, false) => order::Type::Market,
-      };
-
-      let time_in_force = good_until.to_time_in_force();
-
-      let request = order::OrderReq {
-        // TODO: We should probably support other forms of specifying
-        //       the symbol.
-        symbol: asset::Symbol::Sym(symbol),
-        quantity,
-        side,
-        type_,
-        time_in_force,
-        limit_price,
-        stop_price,
-        extended_hours,
-      };
-
-      let order = client
-        .issue::<order::Post>(request)
-        .await
-        .with_context(|| "failed to submit order")?;
-
-      println!("{}", order.id.to_hyphenated_ref());
-      Ok(())
-    },
+    Order::Submit(submit) => order_submit(client, submit).await,
     Order::Cancel { cancel } => order_cancel(client, cancel).await,
     Order::Get { id } => order_get(client, id).await,
     Order::List => order_list(client).await,
   }
 }
+
+
+/// Submit an order.
+async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> {
+  let SubmitOrder {
+    side,
+    symbol,
+    quantity,
+    value,
+    limit_price,
+    stop_price,
+    extended_hours,
+    good_until,
+  } = submit;
+
+  let side = match side {
+    Side::Buy => order::Side::Buy,
+    Side::Sell => order::Side::Sell,
+  };
+
+  let quantity = match quantity {
+    Some(quantity) => quantity,
+    None => {
+      // `value` is guaranteed to be `Some` here as `clap` ensures
+      // this constraint.
+      let value = value.unwrap();
+      value_to_quantity(&client, &symbol, &value, limit_price.clone())
+        .await
+        .with_context(|| format!("unable to convert value to quantity"))?
+    },
+  };
+
+  let type_ = match (limit_price.is_some(), stop_price.is_some()) {
+    (true, true) => order::Type::StopLimit,
+    (true, false) => order::Type::Limit,
+    (false, true) => order::Type::Stop,
+    (false, false) => order::Type::Market,
+  };
+
+  let time_in_force = good_until.to_time_in_force();
+
+  let request = order::OrderReq {
+    // TODO: We should probably support other forms of specifying
+    //       the symbol.
+    symbol: asset::Symbol::Sym(symbol),
+    quantity,
+    side,
+    type_,
+    time_in_force,
+    limit_price,
+    stop_price,
+    extended_hours,
+  };
+
+  let order = client
+    .issue::<order::Post>(request)
+    .await
+    .with_context(|| "failed to submit order")?;
+
+  println!("{}", order.id.to_hyphenated_ref());
+  Ok(())
+}
+
 
 /// Cancel an open order.
 async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> {
