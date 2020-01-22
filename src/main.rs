@@ -184,6 +184,9 @@ enum Order {
   /// Submit an order.
   #[structopt(name = "submit", group = ArgGroup::with_name("amount").required(true))]
   Submit(SubmitOrder),
+  /// Change an order.
+  #[structopt(name = "change", group = ArgGroup::with_name("amount"))]
+  Change(ChangeOrder),
   /// Cancel a single order (by id) or all open ones (via 'all').
   #[structopt(name = "cancel")]
   Cancel { cancel: CancelOrder },
@@ -227,6 +230,29 @@ struct SubmitOrder {
   /// 'market-open', or 'market-close').
   #[structopt(short = "u", long = "good-until", default_value = "canceled")]
   good_until: GoodUntil,
+}
+
+/// A type representing the options to change an order.
+#[derive(Debug, StructOpt)]
+struct ChangeOrder {
+  /// The ID of the order to change.
+  id: OrderId,
+  /// The quantity to trade.
+  #[structopt(long = "quantity", group = "amount")]
+  quantity: Option<u64>,
+  /// The value to trade.
+  #[structopt(long = "value", group = "amount")]
+  value: Option<Num>,
+  /// Create a limit order (or stop limit order) with the given limit price.
+  #[structopt(short = "l", long = "limit")]
+  limit_price: Option<Num>,
+  /// Create a stop order (or stop limit order) with the given stop price.
+  #[structopt(short = "s", long = "stop")]
+  stop_price: Option<Num>,
+  /// How long the order will remain valid ('today', 'canceled',
+  /// 'market-open', or 'market-close').
+  #[structopt(short = "u", long = "good-until")]
+  good_until: Option<GoodUntil>,
 }
 
 
@@ -518,6 +544,7 @@ fn format_trade_status(status: events::TradeStatus) -> &'static str {
 fn format_order_status(status: order::Status) -> &'static str {
   match status {
     order::Status::New => "new",
+    order::Status::Replaced => "replaced",
     order::Status::PartiallyFilled => "partially filled",
     order::Status::Filled => "filled",
     order::Status::DoneForDay => "done for day",
@@ -688,9 +715,22 @@ async fn value_to_quantity(
 async fn order(client: Client, order: Order) -> Result<(), Error> {
   match order {
     Order::Submit(submit) => order_submit(client, submit).await,
+    Order::Change(change) => order_change(client, change).await,
     Order::Cancel { cancel } => order_cancel(client, cancel).await,
     Order::Get { id } => order_get(client, id).await,
     Order::List => order_list(client).await,
+  }
+}
+
+
+/// Determine the type of an order by looking at the limit and stop
+/// prices, if any.
+fn determine_order_type(limit_price: &Option<Num>, stop_price: &Option<Num>) -> order::Type {
+  match (limit_price.is_some(), stop_price.is_some()) {
+    (true, true) => order::Type::StopLimit,
+    (true, false) => order::Type::Limit,
+    (false, true) => order::Type::Stop,
+    (false, false) => order::Type::Market,
   }
 }
 
@@ -713,25 +753,16 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     Side::Sell => order::Side::Sell,
   };
 
-  let quantity = match quantity {
-    Some(quantity) => quantity,
-    None => {
-      // `value` is guaranteed to be `Some` here as `clap` ensures
-      // this constraint.
-      let value = value.unwrap();
-      value_to_quantity(&client, &symbol, &value, limit_price.clone())
-        .await
-        .with_context(|| format!("unable to convert value to quantity"))?
-    },
+  let quantity = match (quantity, value) {
+    (Some(quantity), None) => quantity,
+    (None, Some(value)) => value_to_quantity(&client, &symbol, &value, limit_price.clone())
+      .await
+      .with_context(|| format!("unable to convert value to quantity"))?,
+    // Other combinations should never happen as ensured by `clap`.
+    _ => unreachable!(),
   };
 
-  let type_ = match (limit_price.is_some(), stop_price.is_some()) {
-    (true, true) => order::Type::StopLimit,
-    (true, false) => order::Type::Limit,
-    (false, true) => order::Type::Stop,
-    (false, false) => order::Type::Market,
-  };
-
+  let type_ = determine_order_type(&limit_price, &stop_price);
   let time_in_force = good_until.to_time_in_force();
 
   let request = order::OrderReq {
@@ -753,6 +784,56 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     .with_context(|| "failed to submit order")?;
 
   println!("{}", order.id.to_hyphenated_ref());
+  Ok(())
+}
+
+
+/// Change an order.
+async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> {
+  let ChangeOrder {
+    id,
+    quantity,
+    value,
+    limit_price,
+    stop_price,
+    good_until,
+  } = change;
+
+  let mut order = client
+    .issue::<order::Get>(id.0)
+    .await
+    .with_context(|| format!("failed to retrieve order {}", id.0.to_hyphenated_ref()))?;
+
+  let time_in_force = good_until
+    .map(|x| x.to_time_in_force())
+    .unwrap_or(order.time_in_force);
+  let limit_price = limit_price.or(order.limit_price.take());
+  let stop_price = stop_price.or(order.stop_price.take());
+
+  let quantity = match (quantity, value) {
+    (None, None) => order
+      .quantity
+      .to_u64()
+      .ok_or_else(|| anyhow!("order quantity is not an integer: {}", order.quantity))?,
+    (Some(quantity), None) => quantity,
+    (None, Some(value)) => value_to_quantity(&client, &order.symbol, &value, limit_price.clone())
+      .await
+      .with_context(|| format!("unable to convert value to quantity"))?,
+    _ => unreachable!(),
+  };
+
+  let request = order::ChangeReq {
+    quantity,
+    time_in_force,
+    limit_price,
+    stop_price,
+  };
+
+  let _ = client
+    .issue::<order::Patch>((id.0, request))
+    .await
+    .with_context(|| format!("failed to change order {}", id.0.to_hyphenated_ref()))?;
+
   Ok(())
 }
 
