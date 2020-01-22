@@ -216,10 +216,10 @@ struct SubmitOrder {
   #[structopt(long = "value", group = "amount")]
   value: Option<Num>,
   /// Create a limit order (or stop limit order) with the given limit price.
-  #[structopt(short = "l", long = "limit")]
+  #[structopt(short = "l", long = "limit-price")]
   limit_price: Option<Num>,
   /// Create a stop order (or stop limit order) with the given stop price.
-  #[structopt(short = "s", long = "stop")]
+  #[structopt(short = "s", long = "stop-price")]
   stop_price: Option<Num>,
   /// Create an order that is eligible to execute during
   /// pre-market/after hours. Note that only limit orders that are
@@ -244,10 +244,10 @@ struct ChangeOrder {
   #[structopt(long = "value", group = "amount")]
   value: Option<Num>,
   /// Create a limit order (or stop limit order) with the given limit price.
-  #[structopt(short = "l", long = "limit")]
+  #[structopt(short = "l", long = "limit-price")]
   limit_price: Option<Num>,
   /// Create a stop order (or stop limit order) with the given stop price.
-  #[structopt(short = "s", long = "stop")]
+  #[structopt(short = "s", long = "stop-price")]
   stop_price: Option<Num>,
   /// How long the order will remain valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
