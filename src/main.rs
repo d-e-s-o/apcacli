@@ -1007,12 +1007,10 @@ async fn order_list(client: Client, status: Status) -> Result<(), Error> {
     status: status.0,
     limit: 500,
   };
-  let mut orders = client
+  let orders = client
     .issue::<orders::Get>(request)
     .await
     .with_context(|| "failed to list orders")?;
-
-  orders.sort_by(|a, b| a.symbol.cmp(&b.symbol));
 
   let side_max = max_width(&orders, |p| format_order_side(p.side).len());
   let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
