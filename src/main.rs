@@ -179,25 +179,6 @@ struct Events {
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
-struct Status(orders::Status);
-
-impl FromStr for Status {
-  type Err = String;
-
-  fn from_str(status: &str) -> Result<Self, Self::Err> {
-    let status = match status {
-      "open" => orders::Status::Open,
-      "closed" => orders::Status::Closed,
-      "all" => orders::Status::All,
-      _ => return Err(format!("invalid status value: {}", status)),
-    };
-
-    Ok(Self(status))
-  }
-}
-
-
 /// An enumeration representing the `order` command.
 #[derive(Debug, StructOpt)]
 enum Order {
@@ -219,10 +200,9 @@ enum Order {
   /// List orders.
   #[structopt(name = "list")]
   List {
-    /// The status of the orders to contain in the listing.
-    #[structopt(short = "s", long, default_value = "open",
-                possible_values = &["open", "closed", "all"])]
-    status: Status,
+    /// Show only closed orders instead of open ones.
+    #[structopt(short = "c", long)]
+    closed: bool,
   },
 }
 
@@ -744,7 +724,7 @@ async fn order(client: Client, order: Order) -> Result<(), Error> {
     Order::Change(change) => order_change(client, change).await,
     Order::Cancel { cancel } => order_cancel(client, cancel).await,
     Order::Get { id } => order_get(client, id).await,
-    Order::List { status } => order_list(client, status).await,
+    Order::List { closed } => order_list(client, closed).await,
   }
 }
 
@@ -996,7 +976,7 @@ fn format_quantity(quantity: &Num) -> String {
 
 
 /// List all currently open orders.
-async fn order_list(client: Client, status: Status) -> Result<(), Error> {
+async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
   let currency = client
     .issue::<account::Get>(())
     .await
@@ -1004,7 +984,11 @@ async fn order_list(client: Client, status: Status) -> Result<(), Error> {
     .currency;
 
   let request = orders::OrdersReq {
-    status: status.0,
+    status: if closed {
+      orders::Status::Closed
+    } else {
+      orders::Status::Open
+    },
     limit: 500,
   };
   let orders = client
