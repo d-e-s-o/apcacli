@@ -178,6 +178,26 @@ struct Events {
   json: bool,
 }
 
+
+#[derive(Clone, Debug, PartialEq)]
+struct Status(orders::Status);
+
+impl FromStr for Status {
+  type Err = String;
+
+  fn from_str(status: &str) -> Result<Self, Self::Err> {
+    let status = match status {
+      "open" => orders::Status::Open,
+      "closed" => orders::Status::Closed,
+      "all" => orders::Status::All,
+      _ => return Err(format!("invalid status value: {}", status)),
+    };
+
+    Ok(Self(status))
+  }
+}
+
+
 /// An enumeration representing the `order` command.
 #[derive(Debug, StructOpt)]
 enum Order {
@@ -198,7 +218,12 @@ enum Order {
   },
   /// List orders.
   #[structopt(name = "list")]
-  List,
+  List {
+    /// The status of the orders to contain in the listing.
+    #[structopt(short = "s", long, default_value = "open",
+                possible_values = &["open", "closed", "all"])]
+    status: Status,
+  },
 }
 
 
@@ -527,6 +552,7 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
 fn format_trade_status(status: events::TradeStatus) -> &'static str {
   match status {
     events::TradeStatus::New => "new",
+    events::TradeStatus::Replaced => "replaced",
     events::TradeStatus::PartialFill => "partially filled",
     events::TradeStatus::Filled => "filled",
     events::TradeStatus::DoneForDay => "done for day",
@@ -718,7 +744,7 @@ async fn order(client: Client, order: Order) -> Result<(), Error> {
     Order::Change(change) => order_change(client, change).await,
     Order::Cancel { cancel } => order_cancel(client, cancel).await,
     Order::Get { id } => order_get(client, id).await,
-    Order::List => order_list(client).await,
+    Order::List { status } => order_list(client, status).await,
   }
 }
 
@@ -846,7 +872,12 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
       .await
       .with_context(|| "failed to cancel order"),
     CancelOrder::All => {
-      let request = orders::OrdersReq { limit: 500 };
+      // TODO: This isn't quite sufficient if there are more than 500
+      //       open orders (unlikely but possible).
+      let request = orders::OrdersReq {
+        status: orders::Status::Open,
+        limit: 500,
+      };
       let orders = client
         .issue::<orders::Get>(request)
         .await
@@ -965,14 +996,17 @@ fn format_quantity(quantity: &Num) -> String {
 
 
 /// List all currently open orders.
-async fn order_list(client: Client) -> Result<(), Error> {
+async fn order_list(client: Client, status: Status) -> Result<(), Error> {
   let currency = client
     .issue::<account::Get>(())
     .await
     .with_context(|| "failed to retrieve account information")?
     .currency;
 
-  let request = orders::OrdersReq { limit: 500 };
+  let request = orders::OrdersReq {
+    status: status.0,
+    limit: 500,
+  };
   let mut orders = client
     .issue::<orders::Get>(request)
     .await
