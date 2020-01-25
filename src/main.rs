@@ -36,6 +36,7 @@ use chrono::offset::TimeZone;
 
 use futures::future::ready;
 use futures::future::TryFutureExt;
+use futures::join;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
@@ -882,16 +883,15 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
 
 /// Retrieve information about an order.
 async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
-  let currency = client
-    .issue::<account::Get>(())
-    .await
+  let currency = client.issue::<account::Get>(());
+  let order = client.issue::<order::Get>(id.0);
+
+  let (currency, order) = join!(currency, order);
+  let currency = currency
     .with_context(|| "failed to retrieve account information")?
     .currency;
 
-  let order = client
-    .issue::<order::Get>(id.0)
-    .await
-    .with_context(|| "failed to retrieve order information")?;
+  let order = order.with_context(|| "failed to retrieve order information")?;
 
   println!(r#"{sym}:
   order id:         {id}
@@ -978,12 +978,6 @@ fn format_quantity(quantity: &Num) -> String {
 
 /// List all currently open orders.
 async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
-  let currency = client
-    .issue::<account::Get>(())
-    .await
-    .with_context(|| "failed to retrieve account information")?
-    .currency;
-
   let request = orders::OrdersReq {
     status: if closed {
       orders::Status::Closed
@@ -992,10 +986,16 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
     },
     limit: 500,
   };
-  let orders = client
-    .issue::<orders::Get>(request)
-    .await
-    .with_context(|| "failed to list orders")?;
+
+  let currency = client.issue::<account::Get>(());
+  let orders = client.issue::<orders::Get>(request);
+
+  let (currency, orders) = join!(currency, orders);
+  let currency = currency
+    .with_context(|| "failed to retrieve account information")?
+    .currency;
+
+  let orders = orders.with_context(|| "failed to list orders")?;
 
   let side_max = max_width(&orders, |p| format_order_side(p.side).len());
   let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
@@ -1068,16 +1068,15 @@ fn format_position_side(side: position::Side) -> &'static str {
 
 /// Retrieve and print a position for a given symbol.
 async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
-  let currency = client
-    .issue::<account::Get>(())
-    .await
+  let currency = client.issue::<account::Get>(());
+  let position = client.issue::<position::Get>(symbol.0.clone());
+
+  let (currency, position) = join!(currency, position);
+  let currency = currency
     .with_context(|| "failed to retrieve account information")?
     .currency;
-
-  let position = client
-    .issue::<position::Get>(symbol.0.clone())
-    .await
-    .with_context(|| format!("failed to retrieve position for {}", symbol.0))?;
+  let position =
+    position.with_context(|| format!("failed to retrieve position for {}", symbol.0))?;
 
   println!(r#"{sym}:
   asset id:               {id}
@@ -1113,16 +1112,14 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
 
 /// Liquidate a position for a certain asset.
 async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
-  let currency = client
-    .issue::<account::Get>(())
-    .await
+  let currency = client.issue::<account::Get>(());
+  let order = client.issue::<position::Delete>(symbol.0.clone());
+
+  let (currency, order) = join!(currency, order);
+  let currency = currency
     .with_context(|| "failed to retrieve account information")?
     .currency;
-
-  let order = client
-    .issue::<position::Delete>(symbol.0.clone())
-    .await
-    .with_context(|| format!("failed to liquidate position for {}", symbol.0))?;
+  let order = order.with_context(|| format!("failed to liquidate position for {}", symbol.0))?;
 
   println!(r#"{sym}:
   order id:         {id}
@@ -1324,15 +1321,12 @@ fn position_print(positions: &[position::Position], currency: &str) {
 
 /// List all currently open positions.
 async fn position_list(client: Client) -> Result<(), Error> {
-  let account = client
-    .issue::<account::Get>(())
-    .await
-    .with_context(|| "failed to retrieve account information")?;
+  let account = client.issue::<account::Get>(());
+  let positions = client.issue::<positions::Get>(());
 
-  let mut positions = client
-    .issue::<positions::Get>(())
-    .await
-    .with_context(|| "failed to list positions")?;
+  let (account, positions) = join!(account, positions);
+  let account = account.with_context(|| "failed to retrieve account information")?;
+  let mut positions = positions.with_context(|| "failed to list positions")?;
 
   if !positions.is_empty() {
     positions.sort_by(|a, b| a.symbol.cmp(&b.symbol));
