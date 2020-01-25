@@ -74,20 +74,16 @@ struct Opts {
 #[derive(Debug, StructOpt)]
 enum Command {
   /// Retrieve information about the Alpaca account.
-  #[structopt(name = "account")]
   Account,
   /// Retrieve information pertaining assets.
-  #[structopt(name = "asset")]
   Asset(Asset),
   /// Subscribe to some event stream.
   Events(Events),
   /// Retrieve status information about the market.
   Market,
   /// Perform various order related functions.
-  #[structopt(name = "order")]
   Order(Order),
   /// Perform various position related functions.
-  #[structopt(name = "position")]
   Position(Position),
 }
 
@@ -146,13 +142,11 @@ impl FromStr for Symbol {
 #[derive(Debug, StructOpt)]
 enum Asset {
   /// Query information about a specific asset.
-  #[structopt(name = "get")]
   Get {
     /// The asset's symbol or ID.
     symbol: Symbol,
   },
   /// List all assets.
-  #[structopt(name = "list")]
   List,
 }
 
@@ -161,10 +155,8 @@ enum Asset {
 #[derive(Debug, StructOpt)]
 enum EventType {
   /// Subscribe to account events.
-  #[structopt(name = "account")]
   Account,
   /// Subscribe to trade events.
-  #[structopt(name = "trades")]
   Trades,
 }
 
@@ -174,7 +166,7 @@ struct Events {
   #[structopt(flatten)]
   event: EventType,
   /// Print events in JSON format.
-  #[structopt(short = "j", long = "json")]
+  #[structopt(short = "j", long)]
   json: bool,
 }
 
@@ -183,22 +175,19 @@ struct Events {
 #[derive(Debug, StructOpt)]
 enum Order {
   /// Submit an order.
-  #[structopt(name = "submit", group = ArgGroup::with_name("amount").required(true))]
+  #[structopt(group = ArgGroup::with_name("amount").required(true))]
   Submit(SubmitOrder),
   /// Change an order.
-  #[structopt(name = "change", group = ArgGroup::with_name("amount"))]
+  #[structopt(group = ArgGroup::with_name("amount"))]
   Change(ChangeOrder),
   /// Cancel a single order (by id) or all open ones (via 'all').
-  #[structopt(name = "cancel")]
   Cancel { cancel: CancelOrder },
   /// Retrieve information about a single order.
-  #[structopt(name = "get")]
   Get {
     /// The ID of the order to retrieve information about.
     id: OrderId,
   },
   /// List orders.
-  #[structopt(name = "list")]
   List {
     /// Show only closed orders instead of open ones.
     #[structopt(short = "c", long)]
@@ -215,25 +204,25 @@ struct SubmitOrder {
   /// The symbol of the asset involved in the order.
   symbol: String,
   /// The quantity to trade.
-  #[structopt(long = "quantity", group = "amount")]
+  #[structopt(long, group = "amount")]
   quantity: Option<u64>,
   /// The value to trade.
-  #[structopt(long = "value", group = "amount")]
+  #[structopt(long, group = "amount")]
   value: Option<Num>,
   /// Create a limit order (or stop limit order) with the given limit price.
-  #[structopt(short = "l", long = "limit-price")]
+  #[structopt(short = "l", long)]
   limit_price: Option<Num>,
   /// Create a stop order (or stop limit order) with the given stop price.
-  #[structopt(short = "s", long = "stop-price")]
+  #[structopt(short = "s", long)]
   stop_price: Option<Num>,
   /// Create an order that is eligible to execute during
   /// pre-market/after hours. Note that only limit orders that are
   /// valid for the day are supported.
-  #[structopt(long = "extended-hours")]
+  #[structopt(long)]
   extended_hours: bool,
   /// How long the order will remain valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
-  #[structopt(short = "u", long = "good-until", default_value = "canceled")]
+  #[structopt(short = "u", long, default_value = "canceled")]
   good_until: GoodUntil,
 }
 
@@ -243,20 +232,20 @@ struct ChangeOrder {
   /// The ID of the order to change.
   id: OrderId,
   /// The quantity to trade.
-  #[structopt(long = "quantity", group = "amount")]
+  #[structopt(long, group = "amount")]
   quantity: Option<u64>,
   /// The value to trade.
-  #[structopt(long = "value", group = "amount")]
+  #[structopt(long, group = "amount")]
   value: Option<Num>,
   /// Create a limit order (or stop limit order) with the given limit price.
-  #[structopt(short = "l", long = "limit-price")]
+  #[structopt(short = "l", long)]
   limit_price: Option<Num>,
   /// Create a stop order (or stop limit order) with the given stop price.
-  #[structopt(short = "s", long = "stop-price")]
+  #[structopt(short = "s", long)]
   stop_price: Option<Num>,
   /// How long the order will remain valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
-  #[structopt(short = "u", long = "good-until")]
+  #[structopt(short = "u", long)]
   good_until: Option<GoodUntil>,
 }
 
@@ -322,16 +311,13 @@ impl FromStr for OrderId {
 #[derive(Debug, StructOpt)]
 enum Position {
   /// Inquire information about the position holding a specific symbol.
-  #[structopt(name = "get")]
   Get {
     /// The position's symbol.
     symbol: Symbol,
   },
   /// List all open positions.
-  #[structopt(name = "list")]
   List,
   /// Liquidate a position for a certain asset.
-  #[structopt(name = "close")]
   Close {
     /// The position's symbol.
     symbol: Symbol,
