@@ -12,9 +12,11 @@ use std::io::Write;
 use std::process::exit;
 use std::str::FromStr;
 use std::time::SystemTime;
+use std::time::SystemTimeError;
 use std::time::UNIX_EPOCH;
 
 use apca::api::v2::account;
+use apca::api::v2::account_activities;
 use apca::api::v2::account_config;
 use apca::api::v2::asset;
 use apca::api::v2::assets;
@@ -34,6 +36,8 @@ use anyhow::Error;
 
 use chrono::offset::Local;
 use chrono::offset::TimeZone;
+use chrono::offset::Utc;
+use chrono::DateTime;
 
 use futures::future::ready;
 use futures::future::TryFutureExt;
@@ -145,10 +149,18 @@ impl FromStr for Symbol {
 enum Account {
   /// Query and print information about the account.
   Get,
+  /// Retrieve account activity.
+  Activity(Activity),
   /// Retrieve and modify the account configuration.
   Config(Config),
 }
 
+/// An enumeration representing the `account activity` sub command.
+#[derive(Debug, StructOpt)]
+enum Activity {
+  /// Retrieve account activity.
+  Get,
+}
 
 /// An enumeration representing the `account config` sub command.
 #[derive(Debug, StructOpt)]
@@ -387,6 +399,7 @@ fn format_account_status(status: account::Status) -> String {
 async fn account(client: Client, account: Account) -> Result<(), Error> {
   match account {
     Account::Get => account_get(client).await,
+    Account::Activity(activity) => account_activity(client, activity).await,
     Account::Config(config) => account_config(client, config).await,
   }
 }
@@ -438,6 +451,97 @@ async fn account_get(client: Client) -> Result<(), Error> {
   );
   Ok(())
 }
+
+
+/// The handler for the 'account activity' command.
+async fn account_activity(client: Client, activity: Activity) -> Result<(), Error> {
+  match activity {
+    Activity::Get => account_activity_get(client).await,
+  }
+}
+
+fn format_activity_side(side: account_activities::Side) -> &'static str {
+  match side {
+    account_activities::Side::Buy => "buy",
+    account_activities::Side::Sell => "sell",
+    account_activities::Side::ShortSell => "short sell",
+  }
+}
+
+fn format_activity_type(side: account_activities::ActivityType) -> &'static str {
+  match side {
+    account_activities::ActivityType::Fill => unreachable!(),
+    account_activities::ActivityType::Transaction => "transaction",
+    account_activities::ActivityType::Miscellaneous => "miscellaneous",
+    account_activities::ActivityType::AcatsInOutCash
+    | account_activities::ActivityType::AcatsInOutSecurities => "transfer",
+    account_activities::ActivityType::CashDisbursement
+    | account_activities::ActivityType::CashReceipt => "cash",
+    account_activities::ActivityType::CapitalGainLongTerm
+    | account_activities::ActivityType::CapitalGainShortTerm => "capital gains",
+    account_activities::ActivityType::Dividend
+    | account_activities::ActivityType::DividendFee
+    | account_activities::ActivityType::DividendTaxExtempt
+    | account_activities::ActivityType::DividendReturnOfCapital => "dividend",
+    account_activities::ActivityType::DividendAdjusted
+    | account_activities::ActivityType::DividendAdjustedNraWithheld
+    | account_activities::ActivityType::DividendAdjustedTefraWithheld => "dividend adjusted",
+    account_activities::ActivityType::Interest => "interest",
+    account_activities::ActivityType::InterestAdjustedNraWithheld
+    | account_activities::ActivityType::InterestAdjustedTefraWithheld => "interested adjusted",
+    account_activities::ActivityType::JournalEntry
+    | account_activities::ActivityType::JournalEntryCash
+    | account_activities::ActivityType::JournalEntryStock
+    | account_activities::ActivityType::Acquisition
+    | account_activities::ActivityType::NameChange
+    | account_activities::ActivityType::OptionAssignment
+    | account_activities::ActivityType::OptionExpiration
+    | account_activities::ActivityType::OptionExercise
+    | account_activities::ActivityType::PassThruCharge
+    | account_activities::ActivityType::PassThruRebate
+    | account_activities::ActivityType::Reorg
+    | account_activities::ActivityType::SymbolChange
+    | account_activities::ActivityType::StockSpinoff
+    | account_activities::ActivityType::StockSplit => unimplemented!(),
+  }
+}
+
+/// Retrieve account activity.
+async fn account_activity_get(client: Client) -> Result<(), Error> {
+  let request = account_activities::ActivityReq::default();
+  let currency = client.issue::<account::Get>(());
+  let activity = client.issue::<account_activities::Get>(request);
+
+  let (currency, activity) = join!(currency, activity);
+  let currency = currency
+    .with_context(|| "failed to retrieve account information")?
+    .currency;
+  let activities = activity.with_context(|| "failed to retrieve account activity")?;
+
+  for activity in activities {
+    match activity {
+      account_activities::Activity::Trade(trade) => {
+        println!(r#"{date}  {side} {qty} {sym} @ {price} = {total}"#,
+          date = format_date(&trade.transaction_time),
+          side = format_activity_side(trade.side),
+          qty = trade.quantity,
+          sym = trade.symbol,
+          price = format_price(&trade.price, &currency),
+          total = format_price(&(trade.price * trade.quantity as i32), &currency),
+        );
+      },
+      account_activities::Activity::NonTrade(non_trade) => {
+        println!(r#"{date}  {activity} {amount}"#,
+          date = format_date(&non_trade.date),
+          activity = format_activity_type(non_trade.type_),
+          amount = format_price(&non_trade.net_amount, &currency),
+        );
+      },
+    }
+  }
+  Ok(())
+}
+
 
 /// Retrieve or modify the account configuration.
 async fn account_config(client: Client, config: Config) -> Result<(), Error> {
@@ -582,6 +686,16 @@ async fn asset_list(client: Client) -> Result<(), Error> {
   Ok(())
 }
 
+/// Convert a `SystemTime` into a `DateTime`.
+fn convert_time(time: &SystemTime) -> Result<DateTime<Utc>, SystemTimeError> {
+  time.duration_since(UNIX_EPOCH).map(|duration| {
+    let secs = duration.as_secs().try_into().unwrap();
+    let nanos = duration.subsec_nanos();
+    let time = Utc.timestamp(secs, nanos);
+    time
+  })
+}
+
 /// Format a system time as per RFC 2822.
 fn format_time(time: &SystemTime) -> Cow<'static, str> {
   match time.duration_since(UNIX_EPOCH) {
@@ -592,6 +706,13 @@ fn format_time(time: &SystemTime) -> Cow<'static, str> {
     },
     Err(..) => "N/A".into(),
   }
+}
+
+/// Format a system time as a date.
+fn format_date(time: &SystemTime) -> Cow<'static, str> {
+  convert_time(time)
+    .map(|time| time.date().format("%Y-%m-%d").to_string().into())
+    .unwrap_or_else(|_| "N/A".into())
 }
 
 
