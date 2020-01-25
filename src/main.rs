@@ -155,6 +155,30 @@ enum Account {
 enum Config {
   /// Retrieve the account configuration.
   Get,
+  /// Modify the account configuration.
+  Set(ConfigSet),
+}
+
+#[derive(Debug, StructOpt)]
+struct ConfigSet {
+  /// Enable e-mail trade confirmations.
+  #[structopt(short = "e", long)]
+  confirm_email: bool,
+  /// Disable e-mail trade confirmations.
+  #[structopt(short = "E", long, conflicts_with("confirm-email"))]
+  no_confirm_email: bool,
+  /// Suspend trading.
+  #[structopt(short = "t", long)]
+  trading_suspended: bool,
+  /// Resume trading.
+  #[structopt(short = "T", long, conflicts_with("trading-suspended"))]
+  no_trading_suspended: bool,
+  /// Enable shorting.
+  #[structopt(short = "s", long)]
+  shorting: bool,
+  /// Disable shorting.
+  #[structopt(short = "S", long, conflicts_with("shorting"))]
+  no_shorting: bool,
 }
 
 
@@ -419,6 +443,7 @@ async fn account_get(client: Client) -> Result<(), Error> {
 async fn account_config(client: Client, config: Config) -> Result<(), Error> {
   match config {
     Config::Get => account_config_get(client).await,
+    Config::Set(set) => account_config_set(client, set).await,
   }
 }
 
@@ -446,6 +471,50 @@ async fn account_config_get(client: Client) -> Result<(), Error> {
     trading_suspended = config.trading_suspended,
     shorting = !config.no_shorting,
   );
+  Ok(())
+}
+
+/// Modify the account configuration.
+async fn account_config_set(client: Client, set: ConfigSet) -> Result<(), Error> {
+  let mut config = client
+    .issue::<account_config::Get>(())
+    .await
+    .with_context(|| "failed to retrieve account configuration")?;
+
+  config.trade_confirmation = if set.confirm_email {
+    debug_assert!(!set.no_confirm_email);
+    account_config::TradeConfirmation::Email
+  } else if set.no_confirm_email {
+    debug_assert!(!set.confirm_email);
+    account_config::TradeConfirmation::None
+  } else {
+    config.trade_confirmation
+  };
+
+  config.trading_suspended = if set.trading_suspended {
+    debug_assert!(!set.no_trading_suspended);
+    true
+  } else if set.no_trading_suspended {
+    debug_assert!(!set.trading_suspended);
+    false
+  } else {
+    config.trading_suspended
+  };
+
+  config.no_shorting = if set.shorting {
+    debug_assert!(!set.no_shorting);
+    false
+  } else if set.no_shorting {
+    debug_assert!(!set.shorting);
+    true
+  } else {
+    config.no_shorting
+  };
+
+  let _ = client
+    .issue::<account_config::Patch>(config)
+    .await
+    .with_context(|| "failed to update account configuration")?;
   Ok(())
 }
 
