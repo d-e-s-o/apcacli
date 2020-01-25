@@ -74,7 +74,7 @@ struct Opts {
 #[derive(Debug, StructOpt)]
 enum Command {
   /// Retrieve information about the Alpaca account.
-  Account,
+  Account(Account),
   /// Retrieve information pertaining assets.
   Asset(Asset),
   /// Subscribe to some event stream.
@@ -135,6 +135,14 @@ impl FromStr for Symbol {
 
     Ok(Symbol(sym))
   }
+}
+
+
+/// An enumeration representing the `account` command.
+#[derive(Debug, StructOpt)]
+enum Account {
+  /// Query and print information about the account.
+  Get,
 }
 
 
@@ -340,7 +348,14 @@ fn format_account_status(status: account::Status) -> String {
 
 
 /// The handler for the 'account' command.
-async fn account(client: Client) -> Result<(), Error> {
+async fn account(client: Client, account: Account) -> Result<(), Error> {
+  match account {
+    Account::Get => account_get(client).await,
+  }
+}
+
+/// Print information about the account.
+async fn account_get(client: Client) -> Result<(), Error> {
   let account = client
     .issue::<account::Get>(())
     .await
@@ -1347,7 +1362,7 @@ async fn run() -> Result<(), Error> {
   let client = Client::new(api_info);
 
   match opts.command {
-    Command::Account => account(client).await,
+    Command::Account(account) => self::account(client, account).await,
     Command::Asset(asset) => self::asset(client, asset).await,
     Command::Events(events) => self::events(client, events).await,
     Command::Market => self::market(client).await,
