@@ -15,6 +15,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use apca::api::v2::account;
+use apca::api::v2::account_config;
 use apca::api::v2::asset;
 use apca::api::v2::assets;
 use apca::api::v2::clock;
@@ -143,6 +144,16 @@ impl FromStr for Symbol {
 #[derive(Debug, StructOpt)]
 enum Account {
   /// Query and print information about the account.
+  Get,
+  /// Retrieve and modify the account configuration.
+  Config(Config),
+}
+
+
+/// An enumeration representing the `account config` sub command.
+#[derive(Debug, StructOpt)]
+enum Config {
+  /// Retrieve the account configuration.
   Get,
 }
 
@@ -352,6 +363,7 @@ fn format_account_status(status: account::Status) -> String {
 async fn account(client: Client, account: Account) -> Result<(), Error> {
   match account {
     Account::Get => account_get(client).await,
+    Account::Config(config) => account_config(client, config).await,
   }
 }
 
@@ -399,6 +411,40 @@ async fn account_get(client: Client) -> Result<(), Error> {
     trading_blocked = account.trading_blocked,
     transfers_blocked = account.transfers_blocked,
     account_blocked = account.account_blocked,
+  );
+  Ok(())
+}
+
+/// Retrieve or modify the account configuration.
+async fn account_config(client: Client, config: Config) -> Result<(), Error> {
+  match config {
+    Config::Get => account_config_get(client).await,
+  }
+}
+
+
+/// Format an account status.
+fn format_trade_confirmation(confirmation: account_config::TradeConfirmation) -> &'static str {
+  match confirmation {
+    account_config::TradeConfirmation::Email => "e-mail",
+    account_config::TradeConfirmation::None => "none",
+  }
+}
+
+/// Retrieve the account configuration.
+async fn account_config_get(client: Client) -> Result<(), Error> {
+  let config = client
+    .issue::<account_config::Get>(())
+    .await
+    .with_context(|| "failed to retrieve account configuration")?;
+
+  println!(r#"account configuration:
+  trade confirmation:  {trade_confirmation}
+  trading suspended:   {trading_suspended}
+  shorting enabled:    {shorting}"#,
+    trade_confirmation = format_trade_confirmation(config.trade_confirmation),
+    trading_suspended = config.trading_suspended,
+    shorting = !config.no_shorting,
   );
   Ok(())
 }
