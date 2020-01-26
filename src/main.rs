@@ -72,7 +72,7 @@ struct Opts {
   #[structopt(subcommand)]
   command: Command,
   /// Increase verbosity (can be supplied multiple times).
-  #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+  #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
 }
 
