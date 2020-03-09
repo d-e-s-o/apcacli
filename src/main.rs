@@ -772,10 +772,12 @@ fn format_trade_status(status: events::TradeStatus) -> &'static str {
   match status {
     events::TradeStatus::New => "new",
     events::TradeStatus::Replaced => "replaced",
+    events::TradeStatus::ReplaceRejected => "replace rejected",
     events::TradeStatus::PartialFill => "partially filled",
     events::TradeStatus::Filled => "filled",
     events::TradeStatus::DoneForDay => "done for day",
     events::TradeStatus::Canceled => "canceled",
+    events::TradeStatus::CancelRejected => "cancel rejected",
     events::TradeStatus::Expired => "expired",
     events::TradeStatus::PendingCancel => "pending cancel",
     events::TradeStatus::Stopped => "stopped",
@@ -1418,9 +1420,22 @@ fn format_percent_gain(percent: &Num) -> Paint<String> {
   format_colored(percent, format_percent)
 }
 
+
+/// Format a quantity for a position.
+fn format_position_quantity(quantity: u64, side: position::Side) -> String {
+  match side {
+    position::Side::Long => quantity.into(),
+    position::Side::Short => -((quantity as u128) as i128),
+  }
+  .to_string()
+}
+
+
 /// Print a table with the given positions.
 fn position_print(positions: &[position::Position], currency: &str) {
-  let qty_max = max_width(&positions, |p| p.quantity.to_string().len());
+  let qty_max = max_width(&positions, |p| {
+    format_position_quantity(p.quantity, p.side).len()
+  });
   let sym_max = max_width(&positions, |p| p.symbol.len());
   let price_max = max_width(&positions, |p| {
     format_price(&p.current_price, currency).len()
@@ -1502,7 +1517,7 @@ fn position_print(positions: &[position::Position], currency: &str) {
        {today:>today_width$} ({today_pct:>today_pct_width$}) | \
        {total:>total_width$} ({total_pct:>total_pct_width$})",
       qty_width = qty_max,
-      qty = position.quantity,
+      qty = format_position_quantity(position.quantity, position.side),
       sym_width = sym_max,
       sym = position.symbol,
       price_width = price_max,
