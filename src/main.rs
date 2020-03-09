@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 use std::cmp::max;
+use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::stdout;
@@ -858,8 +859,8 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
             order_status = format_order_status(update.order.status),
             type_ = format_order_type(update.order.type_),
             side = format_order_side(update.order.side),
-            quantity = update.order.quantity.round(),
-            filled = update.order.filled_quantity.round(),
+            quantity = update.order.quantity,
+            filled = update.order.filled_quantity,
           );
         }
         Ok(())
@@ -1020,6 +1021,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     limit_price,
     stop_price,
     extended_hours,
+    client_order_id: None,
   };
 
   let order = client
@@ -1055,10 +1057,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
   let stop_price = stop_price.or(order.stop_price.take());
 
   let quantity = match (quantity, value) {
-    (None, None) => order
-      .quantity
-      .to_u64()
-      .ok_or_else(|| anyhow!("order quantity is not an integer: {}", order.quantity))?,
+    (None, None) => order.quantity,
     (Some(quantity), None) => quantity,
     (None, Some(value)) => value_to_quantity(&client, &order.symbol, &value, limit_price.clone())
       .await
@@ -1206,12 +1205,6 @@ where
 }
 
 
-/// Format a quantity.
-fn format_quantity(quantity: &Num) -> String {
-  format!("{:.0}", quantity)
-}
-
-
 /// List all currently open orders.
 async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
   let request = orders::OrdersReq {
@@ -1234,10 +1227,13 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
   let orders = orders.with_context(|| "failed to list orders")?;
 
   let side_max = max_width(&orders, |p| format_order_side(p.side).len());
-  let qty_max = max_width(&orders, |p| format_quantity(&p.quantity).len());
+  let qty_max = max_width(&orders, |p| p.quantity.to_string().len());
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
   for order in orders {
+    let quantity = i32::try_from(order.quantity)
+      .with_context(|| format!("order quantity ({}) does not fit into i32", order.quantity))?;
+
     let summary = match (order.limit_price, order.stop_price) {
       (Some(limit), Some(stop)) => {
         debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
@@ -1245,7 +1241,7 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
           "stop @ {}, limit @ {} = {}",
           format_price(&stop, &currency),
           format_price(&limit, &currency),
-          format_price(&(&limit * &order.quantity), &currency)
+          format_price(&(&limit * quantity), &currency)
         )
       },
       (Some(limit), None) => {
@@ -1253,7 +1249,7 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
         format!(
           "limit @ {} = {}",
           format_price(&limit, &currency),
-          format_price(&(limit * &order.quantity), &currency)
+          format_price(&(limit * quantity), &currency)
         )
       },
       (None, Some(stop)) => {
@@ -1261,7 +1257,7 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
         format!(
           "stop @ {} = {}",
           format_price(&stop, &currency),
-          format_price(&(stop * &order.quantity), &currency)
+          format_price(&(stop * quantity), &currency)
         )
       },
       (None, None) => {
@@ -1424,7 +1420,7 @@ fn format_percent_gain(percent: &Num) -> Paint<String> {
 
 /// Print a table with the given positions.
 fn position_print(positions: &[position::Position], currency: &str) {
-  let qty_max = max_width(&positions, |p| format_quantity(&p.quantity).len());
+  let qty_max = max_width(&positions, |p| p.quantity.to_string().len());
   let sym_max = max_width(&positions, |p| p.symbol.len());
   let price_max = max_width(&positions, |p| {
     format_price(&p.current_price, currency).len()
