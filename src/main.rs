@@ -507,6 +507,30 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
   }
 }
 
+
+/// Sort a vector of `Activity` objects in descending order of their
+/// time stamps.
+fn sort_account_activity(activities: &mut Vec<account_activities::Activity>) {
+  activities.sort_by(|act1, act2| {
+    let ordering = match act1 {
+      account_activities::Activity::Trade(trade1) => match act2 {
+        account_activities::Activity::Trade(trade2) => {
+          trade1.transaction_time.cmp(&trade2.transaction_time)
+        },
+        account_activities::Activity::NonTrade(non_trade) => {
+          trade1.transaction_time.cmp(&non_trade.date)
+        },
+      },
+      account_activities::Activity::NonTrade(non_trade1) => match act2 {
+        account_activities::Activity::Trade(trade) => non_trade1.date.cmp(&trade.transaction_time),
+        account_activities::Activity::NonTrade(non_trade2) => non_trade1.date.cmp(&non_trade2.date),
+      },
+    };
+    ordering.reverse()
+  });
+}
+
+
 /// Retrieve account activity.
 async fn account_activity_get(client: Client) -> Result<(), Error> {
   let request = account_activities::ActivityReq::default();
@@ -517,7 +541,8 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
   let currency = currency
     .with_context(|| "failed to retrieve account information")?
     .currency;
-  let activities = activity.with_context(|| "failed to retrieve account activity")?;
+  let mut activities = activity.with_context(|| "failed to retrieve account activity")?;
+  sort_account_activity(&mut activities);
 
   for activity in activities {
     match activity {
