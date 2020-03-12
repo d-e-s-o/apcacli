@@ -889,6 +889,7 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
   status:        {order_status}
   type:          {type_}
   side:          {side}
+  good until:    {good_until}
   quantity:      {quantity}
   filled:        {filled}
 "#,
@@ -898,6 +899,7 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
             order_status = format_order_status(update.order.status),
             type_ = format_order_type(update.order.type_),
             side = format_order_side(update.order.side),
+            good_until = format_time_in_force(update.order.time_in_force),
             quantity = update.order.quantity,
             filled = update.order.filled_quantity,
           );
