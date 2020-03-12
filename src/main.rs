@@ -522,8 +522,8 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
   for activity in activities {
     match activity {
       account_activities::Activity::Trade(trade) => {
-        println!(r#"{date}  {side} {qty} {sym} @ {price} = {total}"#,
-          date = format_date(&trade.transaction_time),
+        println!(r#"{time}  {side} {qty} {sym} @ {price} = {total}"#,
+          time = format_time_short(&trade.transaction_time),
           side = format_activity_side(trade.side),
           qty = trade.quantity,
           sym = trade.symbol,
@@ -532,7 +532,7 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
         );
       },
       account_activities::Activity::NonTrade(non_trade) => {
-        println!(r#"{date}  {activity} {amount}"#,
+        println!(r#"{date:19}  {activity} {amount}"#,
           date = format_date(&non_trade.date),
           activity = format_activity_type(non_trade.type_),
           amount = format_price(&non_trade.net_amount, &currency),
@@ -697,16 +697,28 @@ fn convert_time(time: &SystemTime) -> Result<DateTime<Utc>, SystemTimeError> {
   })
 }
 
+/// Convert a `SystemTime` into a `DateTime` according to the local time.
+fn convert_local_time(time: &SystemTime) -> Result<DateTime<Local>, SystemTimeError> {
+  time.duration_since(UNIX_EPOCH).map(|duration| {
+    let secs = duration.as_secs().try_into().unwrap();
+    let nanos = duration.subsec_nanos();
+    let time = Local.timestamp(secs, nanos);
+    time
+  })
+}
+
 /// Format a system time as per RFC 2822.
 fn format_time(time: &SystemTime) -> Cow<'static, str> {
-  match time.duration_since(UNIX_EPOCH) {
-    Ok(duration) => {
-      let secs = duration.as_secs().try_into().unwrap();
-      let nanos = duration.subsec_nanos();
-      Local.timestamp(secs, nanos).to_rfc2822().into()
-    },
-    Err(..) => "N/A".into(),
-  }
+  convert_local_time(time)
+    .map(|time| time.to_rfc2822().into())
+    .unwrap_or_else(|_| "N/A".into())
+}
+
+/// Format a system time as per RFC 2822.
+fn format_time_short(time: &SystemTime) -> Cow<'static, str> {
+  convert_local_time(time)
+    .map(|time| time.format("%Y-%m-%d %H:%M:%S").to_string().into())
+    .unwrap_or_else(|_| "N/A".into())
 }
 
 /// Format a system time as a date.
