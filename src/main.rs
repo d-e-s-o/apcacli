@@ -1501,12 +1501,22 @@ fn position_print(positions: &[position::Position], currency: &str) {
   let today_gain = positions
     .iter()
     .fold(Num::default(), |acc, p| acc + &p.unrealized_gain_today);
-  let base_value = positions
-    .iter()
-    .fold(Num::default(), |acc, p| acc + &p.cost_basis);
-  let total_value = positions
-    .iter()
-    .fold(Num::default(), |acc, p| acc + &p.market_value);
+  let base_value = positions.iter().fold(Num::default(), |acc, p| {
+    acc
+      + if p.side == position::Side::Short {
+        -&p.cost_basis
+      } else {
+        p.cost_basis.clone()
+      }
+  });
+  let total_value = positions.iter().fold(Num::default(), |acc, p| {
+    acc
+      + if p.side == position::Side::Short {
+        -&p.cost_basis + &p.unrealized_gain_total
+      } else {
+        &p.cost_basis + &p.unrealized_gain_total
+      }
+  });
   let total_gain = &total_value - &base_value;
   let last_value = &total_value - &today_gain;
   let (last_pct, total_gain_pct) = if base_value.is_zero() {
