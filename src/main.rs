@@ -95,16 +95,16 @@ enum Command {
 }
 
 
-/// An indication until when an order is valid.
+/// An indication when/for how long an order is valid.
 #[derive(Debug)]
-enum GoodUntil {
+enum TimeInForce {
   Today,
   Canceled,
   MarketOpen,
   MarketClose,
 }
 
-impl GoodUntil {
+impl TimeInForce {
   pub fn to_time_in_force(&self) -> order::TimeInForce {
     match self {
       Self::Today => order::TimeInForce::Day,
@@ -115,7 +115,7 @@ impl GoodUntil {
   }
 }
 
-impl FromStr for GoodUntil {
+impl FromStr for TimeInForce {
   type Err = String;
 
   fn from_str(src: &str) -> Result<Self, Self::Err> {
@@ -124,7 +124,7 @@ impl FromStr for GoodUntil {
       "canceled" => Ok(Self::Canceled),
       "market-open" => Ok(Self::MarketOpen),
       "market-close" => Ok(Self::MarketClose),
-      _ => Err(format!("invalid good-until specifier: {}", src)),
+      _ => Err(format!("invalid time-in-force specifier: {}", src)),
     }
   }
 }
@@ -277,10 +277,10 @@ struct SubmitOrder {
   /// valid for the day are supported.
   #[structopt(long)]
   extended_hours: bool,
-  /// How long the order will remain valid ('today', 'canceled',
+  /// When/for how long the order is valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
-  #[structopt(short = "u", long, default_value = "canceled")]
-  good_until: GoodUntil,
+  #[structopt(short = "t", long, default_value = "canceled")]
+  time_in_force: TimeInForce,
 }
 
 /// A type representing the options to change an order.
@@ -300,10 +300,10 @@ struct ChangeOrder {
   /// Create a stop order (or stop limit order) with the given stop price.
   #[structopt(short = "s", long)]
   stop_price: Option<Num>,
-  /// How long the order will remain valid ('today', 'canceled',
+  /// When/for how long the order is valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
-  #[structopt(short = "u", long)]
-  good_until: Option<GoodUntil>,
+  #[structopt(short = "t", long)]
+  time_in_force: Option<TimeInForce>,
 }
 
 
@@ -863,7 +863,7 @@ fn format_order_side(side: order::Side) -> &'static str {
 
 fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
   match time_in_force {
-    order::TimeInForce::Day => "end-of-day",
+    order::TimeInForce::Day => "today",
     order::TimeInForce::UntilCanceled => "canceled",
     order::TimeInForce::UntilMarketOpen => "market open",
     order::TimeInForce::UntilMarketClose => "market close",
@@ -885,13 +885,13 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
           println!("{}", json);
         } else {
           println!(r#"{symbol} {status}:
-  order id:      {id}
-  status:        {order_status}
-  type:          {type_}
-  side:          {side}
-  good until:    {good_until}
-  quantity:      {quantity}
-  filled:        {filled}
+  order id:       {id}
+  status:         {order_status}
+  type:           {type_}
+  side:           {side}
+  time-in-force:  {time_in_force}
+  quantity:       {quantity}
+  filled:         {filled}
 "#,
             symbol = update.order.symbol,
             status = format_trade_status(update.event),
@@ -899,7 +899,7 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
             order_status = format_order_status(update.order.status),
             type_ = format_order_type(update.order.type_),
             side = format_order_side(update.order.side),
-            good_until = format_time_in_force(update.order.time_in_force),
+            time_in_force = format_time_in_force(update.order.time_in_force),
             quantity = update.order.quantity,
             filled = update.order.filled_quantity,
           );
@@ -1031,7 +1031,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     limit_price,
     stop_price,
     extended_hours,
-    good_until,
+    time_in_force,
   } = submit;
 
   let side = match side {
@@ -1049,7 +1049,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
   };
 
   let type_ = determine_order_type(&limit_price, &stop_price);
-  let time_in_force = good_until.to_time_in_force();
+  let time_in_force = time_in_force.to_time_in_force();
 
   let request = order::OrderReq {
     // TODO: We should probably support other forms of specifying
@@ -1083,7 +1083,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
     value,
     limit_price,
     stop_price,
-    good_until,
+    time_in_force,
   } = change;
 
   let mut order = client
@@ -1091,7 +1091,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
     .await
     .with_context(|| format!("failed to retrieve order {}", id.0.to_hyphenated_ref()))?;
 
-  let time_in_force = good_until
+  let time_in_force = time_in_force
     .map(|x| x.to_time_in_force())
     .unwrap_or(order.time_in_force);
   let limit_price = limit_price.or(order.limit_price.take());
