@@ -842,6 +842,7 @@ fn format_order_status(status: order::Status) -> &'static str {
     order::Status::Rejected => "rejected",
     order::Status::Suspended => "suspended",
     order::Status::Calculated => "calculated",
+    order::Status::Held => "held",
   }
 }
 
@@ -1051,19 +1052,17 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
   let type_ = determine_order_type(&limit_price, &stop_price);
   let time_in_force = time_in_force.to_time_in_force();
 
-  let request = order::OrderReq {
-    // TODO: We should probably support other forms of specifying
-    //       the symbol.
-    symbol: asset::Symbol::Sym(symbol),
-    quantity,
-    side,
-    type_,
-    time_in_force,
-    limit_price,
-    stop_price,
-    extended_hours,
-    client_order_id: None,
-  };
+  // TODO: We should probably support other forms of specifying
+  //       the symbol.
+  let request = order::OrderReqInit {
+    type_: type_,
+    time_in_force: time_in_force,
+    limit_price: limit_price,
+    stop_price: stop_price,
+    extended_hours: extended_hours,
+    ..Default::default()
+  }
+  .init(symbol, side, quantity);
 
   let order = client
     .issue::<order::Post>(request)

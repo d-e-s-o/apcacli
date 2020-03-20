@@ -19,11 +19,11 @@ A command line tool for trading stocks on Alpaca (alpaca.markets).
 """
 
 [dependencies]
-apca = "0.10"
+apca = "0.11"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
-num-decimal = "0.1"
+num-decimal = "0.2"
 serde_json = {version = "1.0", default-features = false}
 structopt = "0.3"
 tokio = {version = "0.2", default-features = false, features = ["rt-core"]}
