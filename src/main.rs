@@ -392,6 +392,7 @@ fn format_account_status(status: account::Status) -> String {
     account::Status::ApprovalPending => "approval pending",
     account::Status::Active => "active",
     account::Status::Rejected => "rejected",
+    account::Status::Unknown => "unknown",
   }.to_string()
 }
 
@@ -822,6 +823,7 @@ fn format_trade_status(status: events::TradeStatus) -> &'static str {
     events::TradeStatus::Suspended => "suspended",
     events::TradeStatus::PendingNew => "pending new",
     events::TradeStatus::Calculated => "calculated",
+    events::TradeStatus::Unknown => "unknown",
   }
 }
 
@@ -838,11 +840,13 @@ fn format_order_status(status: order::Status) -> &'static str {
     order::Status::PendingNew => "pending new",
     order::Status::AcceptedForBidding => "accepted for bidding",
     order::Status::PendingCancel => "pending cancel",
+    order::Status::PendingReplace => "pending replace",
     order::Status::Stopped => "stopped",
     order::Status::Rejected => "rejected",
     order::Status::Suspended => "suspended",
     order::Status::Calculated => "calculated",
     order::Status::Held => "held",
+    order::Status::Unknown => "unknown",
   }
 }
 
