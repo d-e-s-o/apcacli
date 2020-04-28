@@ -67,6 +67,18 @@ use uuid::Uuid;
 use yansi::Paint;
 
 
+// A replacement of the standard println!() macro that does not panic
+// when encountering an EPIPE.
+macro_rules! println {
+  ($($arg:tt)*) => {
+    match writeln!(::std::io::stdout(), $($arg)*) {
+      Ok(..) => (),
+      Err(err) if err.kind() == ::std::io::ErrorKind::BrokenPipe => (),
+      Err(err) => panic!("failed printing to stdout: {}", err),
+    }
+  };
+}
+
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
 struct Opts {
