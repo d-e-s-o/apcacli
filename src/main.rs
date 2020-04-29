@@ -81,7 +81,7 @@ macro_rules! println {
 
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
-struct Opts {
+struct Args {
   #[structopt(subcommand)]
   command: Command,
   /// Increase verbosity (can be supplied multiple times).
@@ -1647,8 +1647,8 @@ async fn position_list(client: Client) -> Result<(), Error> {
 }
 
 async fn run() -> Result<(), Error> {
-  let opts = Opts::from_args();
-  let level = match opts.verbosity {
+  let args = Args::from_args();
+  let level = match args.verbosity {
     0 => LevelFilter::WARN,
     1 => LevelFilter::INFO,
     2 => LevelFilter::DEBUG,
@@ -1666,7 +1666,7 @@ async fn run() -> Result<(), Error> {
     ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
   let client = Client::new(api_info);
 
-  match opts.command {
+  match args.command {
     Command::Account(account) => self::account(client, account).await,
     Command::Asset(asset) => self::asset(client, asset).await,
     Command::Events(events) => self::events(client, events).await,
