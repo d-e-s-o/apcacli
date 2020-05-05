@@ -18,6 +18,10 @@ description = """
 A command line tool for trading stocks on Alpaca (alpaca.markets).
 """
 
+[[bin]]
+name = "shell-complete"
+path = "utils/shell-complete.rs"
+
 [dependencies]
 apca = "0.12"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
