@@ -23,12 +23,12 @@ name = "shell-complete"
 path = "utils/shell-complete.rs"
 
 [dependencies]
-apca = "0.12"
+apca = "0.13"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
 num-decimal = "0.2"
-serde_json = {version = "1.0", default-features = false}
+serde_json = {version = "1.0", default-features = false, features = ["raw_value"]}
 structopt = {version = "0.3", default-features = false}
 tokio = {version = "0.2", default-features = false, features = ["rt-core"]}
 tracing = {version = "0.1", default-features = false, features = ["std"]}

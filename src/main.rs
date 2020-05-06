@@ -28,6 +28,7 @@ use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::data::v1::bars;
+use apca::event;
 use apca::ApiInfo;
 use apca::Client;
 
@@ -49,7 +50,7 @@ use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
 
-use serde_json::to_string as to_json;
+use serde_json::value::RawValue;
 
 use structopt::StructOpt;
 
@@ -467,21 +468,42 @@ fn format_date(time: &SystemTime) -> Cow<'static, str> {
 }
 
 
+/// A helper for receiving raw JSON account updates.
+enum RawAccountUpdates {}
+
+impl event::EventStream for RawAccountUpdates {
+  type Event = Box<RawValue>;
+
+  fn stream() -> event::StreamType {
+    event::StreamType::AccountUpdates
+  }
+}
+
+
 async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error> {
-  client
-    .subscribe::<events::AccountUpdates>()
-    .await
-    .with_context(|| "failed to subscribe to account updates")?
-    .map_err(Error::from)
-    .try_for_each(|result| {
-      async {
+  if json {
+    event::stream::<RawAccountUpdates>(client.api_info())
+      .await
+      .with_context(|| "failed to subscribe to account updates")?
+      .map_err(Error::from)
+      .try_for_each(|result| {
+        async {
+          let update = result.unwrap();
+          // TODO: We should honor the write result.
+          let _result = stdout().write(&update.get().as_bytes());
+          Ok(())
+        }
+      })
+      .await?;
+  } else {
+    client
+      .subscribe::<events::AccountUpdates>()
+      .await
+      .with_context(|| "failed to subscribe to account updates")?
+      .map_err(Error::from)
+      .try_for_each(|result| async {
         let update = result.unwrap();
-        if json {
-          let json =
-            to_json(&update).with_context(|| "failed to serialize account update to JSON")?;
-          println!("{}", json);
-        } else {
-          println!(r#"account update:
+        println!(r#"account update:
   status:        {status}
   created at:    {created}
   updated at:    {updated}
@@ -489,30 +511,29 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
   cash:          {cash}
   withdrawable:  {withdrawable}
 "#,
-            status = update.status,
-            created = update
-              .created_at
-              .as_ref()
-              .map(format_time)
-              .unwrap_or_else(|| "N/A".into()),
-            updated = update
-              .updated_at
-              .as_ref()
-              .map(format_time)
-              .unwrap_or_else(|| "N/A".into()),
-            deleted = update
-              .deleted_at
-              .as_ref()
-              .map(format_time)
-              .unwrap_or_else(|| "N/A".into()),
-            cash = format_price(&update.cash, &update.currency),
-            withdrawable = format_price(&update.withdrawable_cash, &update.currency),
-          );
-        }
+          status = update.status,
+          created = update
+            .created_at
+            .as_ref()
+            .map(format_time)
+            .unwrap_or_else(|| "N/A".into()),
+          updated = update
+            .updated_at
+            .as_ref()
+            .map(format_time)
+            .unwrap_or_else(|| "N/A".into()),
+          deleted = update
+            .deleted_at
+            .as_ref()
+            .map(format_time)
+            .unwrap_or_else(|| "N/A".into()),
+          cash = format_price(&update.cash, &update.currency),
+          withdrawable = format_price(&update.withdrawable_cash, &update.currency),
+        );
         Ok(())
-      }
-    })
-    .await?;
+      })
+      .await?;
+  }
 
   Ok(())
 }
@@ -587,21 +608,41 @@ fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
   }
 }
 
+
+/// A helper for receiving raw JSON trade updates.
+enum RawTradeUpdates {}
+
+impl event::EventStream for RawTradeUpdates {
+  type Event = Box<RawValue>;
+
+  fn stream() -> event::StreamType {
+    event::StreamType::TradeUpdates
+  }
+}
+
+
 async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
-  client
-    .subscribe::<events::TradeUpdates>()
-    .await
-    .with_context(|| "failed to subscribe to trade updates")?
-    .map_err(Error::from)
-    .try_for_each(|result| {
-      async {
+  if json {
+    event::stream::<RawTradeUpdates>(client.api_info())
+      .await
+      .with_context(|| "failed to subscribe to trade updates")?
+      .map_err(Error::from)
+      .try_for_each(|result| async {
         let update = result.unwrap();
-        if json {
-          let json =
-            to_json(&update).with_context(|| "failed to serialize trade update to JSON")?;
-          println!("{}", json);
-        } else {
-          println!(r#"{symbol} {status}:
+        // TODO: We should honor the write result.
+        let _result = stdout().write(&update.get().as_bytes());
+        Ok(())
+      })
+      .await?;
+  } else {
+    client
+      .subscribe::<events::TradeUpdates>()
+      .await
+      .with_context(|| "failed to subscribe to trade updates")?
+      .map_err(Error::from)
+      .try_for_each(|result| async {
+        let update = result.unwrap();
+        println!(r#"{symbol} {status}:
   order id:       {id}
   status:         {order_status}
   type:           {type_}
@@ -610,21 +651,20 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
   quantity:       {quantity}
   filled:         {filled}
 "#,
-            symbol = update.order.symbol,
-            status = format_trade_status(update.event),
-            id = update.order.id.to_hyphenated_ref(),
-            order_status = format_order_status(update.order.status),
-            type_ = format_order_type(update.order.type_),
-            side = format_order_side(update.order.side),
-            time_in_force = format_time_in_force(update.order.time_in_force),
-            quantity = update.order.quantity,
-            filled = update.order.filled_quantity,
-          );
-        }
+          symbol = update.order.symbol,
+          status = format_trade_status(update.event),
+          id = update.order.id.to_hyphenated_ref(),
+          order_status = format_order_status(update.order.status),
+          type_ = format_order_type(update.order.type_),
+          side = format_order_side(update.order.side),
+          time_in_force = format_time_in_force(update.order.time_in_force),
+          quantity = update.order.quantity,
+          filled = update.order.filled_quantity,
+        );
         Ok(())
-      }
-    })
-    .await?;
+      })
+      .await?;
+  }
 
   Ok(())
 }
