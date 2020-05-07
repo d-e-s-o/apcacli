@@ -6,6 +6,7 @@ edition = "2018"
 license = "GPL-3.0-or-later"
 homepage = "https://github.com/d-e-s-o/apcacli"
 repository = "https://github.com/d-e-s-o/apcacli.git"
+readme = "README.md"
 categories = [
   "api-bindings",
   "asynchronous",
