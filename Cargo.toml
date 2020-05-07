@@ -24,7 +24,7 @@ name = "shell-complete"
 path = "utils/shell-complete.rs"
 
 [dependencies]
-apca = "0.13"
+apca = "0.14"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
