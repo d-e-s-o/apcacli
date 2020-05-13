@@ -3,6 +3,8 @@
 apcacli
 =======
 
+- [Changelog](CHANGELOG.md)
+
 **apcacli** is a command line application for interacting with the
 Alpaca API at [alpaca.markets][]. It provides access to the majority of
 Alpaca's functionality, including but not limited to:

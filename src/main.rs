@@ -868,11 +868,12 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
     stop_price,
   };
 
-  let _ = client
+  let order = client
     .issue::<order::Patch>((id.0, request))
     .await
     .with_context(|| format!("failed to change order {}", id.0.to_hyphenated_ref()))?;
 
+  println!("{}", order.id.to_hyphenated_ref());
   Ok(())
 }
 
