@@ -1195,7 +1195,7 @@ where
   } else if value.is_negative() {
     Paint::red(format(value))
   } else {
-    Paint::black(format(value))
+    Paint::default(format(value))
   }
 }
 
