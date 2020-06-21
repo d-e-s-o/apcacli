@@ -5,6 +5,7 @@ Unreleased
   no gains/losses
 - Enabled CI pipeline comprising building and linting of the project
   - Added badge indicating pipeline status
+- Bumped `apca` dependency to `0.15`
 
 
 0.1.0
