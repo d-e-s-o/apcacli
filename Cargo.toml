@@ -19,6 +19,9 @@ description = """
 A command line tool for trading stocks on Alpaca (alpaca.markets).
 """
 
+[badges]
+gitlab = { repository = "d-e-s-o/apcacli", branch = "master" }
+
 [[bin]]
 name = "shell-complete"
 path = "utils/shell-complete.rs"

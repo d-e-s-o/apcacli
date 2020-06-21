@@ -1,0 +1,29 @@
+# The documentation for the contents of this file can be found at:
+# https://docs.gitlab.com/ce/ci/yaml/README.html
+
+# Official language image. Look for the different tagged releases at:
+# https://hub.docker.com/r/library/rust/tags/
+# The recipe for this docker image can be found at:
+# https://github.com/rust-lang/docker-rust/blob/3898d19194231639f1afc3096bd04702eaf555e7/1.40.0/buster/Dockerfile
+image: "rust:1.40.0"
+
+stages:
+  - build
+  - test
+
+build:cargo:
+  stage: build
+  artifacts:
+    paths:
+      - target/
+  script:
+  - rustc --version && cargo --version
+  - cargo build --tests --all --verbose
+
+lint:clippy:
+  stage: test
+  dependencies:
+    - build:cargo
+  script:
+  - rustup component add clippy
+  - cargo clippy --all-targets --all-features -- -D warnings

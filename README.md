@@ -1,4 +1,6 @@
+[![pipeline](https://gitlab.com/d-e-s-o/apcacli/badges/master/pipeline.svg)](https://gitlab.com/d-e-s-o/apcacli/commits/master)
 [![crates.io](https://img.shields.io/crates/v/apcacli.svg)](https://crates.io/crates/apcacli)
+[![rustc](https://img.shields.io/badge/rustc-1.40+-blue.svg)](https://blog.rust-lang.org/2019/12/19/Rust-1.40.0.html)
 
 apcacli
 =======
