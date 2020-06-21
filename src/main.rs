@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
+#![allow(
+  clippy::large_enum_variant,
+  clippy::let_and_return,
+)]
 
 mod args;
 
@@ -800,7 +804,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     (Some(quantity), None) => quantity,
     (None, Some(value)) => value_to_quantity(&client, &symbol, &value, limit_price.clone())
       .await
-      .with_context(|| format!("unable to convert value to quantity"))?,
+      .with_context(|| "unable to convert value to quantity")?,
     // Other combinations should never happen as ensured by `clap`.
     _ => unreachable!(),
   };
@@ -811,11 +815,11 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
   // TODO: We should probably support other forms of specifying
   //       the symbol.
   let request = order::OrderReqInit {
-    type_: type_,
-    time_in_force: time_in_force,
-    limit_price: limit_price,
-    stop_price: stop_price,
-    extended_hours: extended_hours,
+    type_,
+    time_in_force,
+    limit_price,
+    stop_price,
+    extended_hours,
     ..Default::default()
   }
   .init(symbol, side, quantity);
@@ -849,15 +853,15 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
   let time_in_force = time_in_force
     .map(|x| x.to_time_in_force())
     .unwrap_or(order.time_in_force);
-  let limit_price = limit_price.or(order.limit_price.take());
-  let stop_price = stop_price.or(order.stop_price.take());
+  let limit_price = limit_price.or_else(|| order.limit_price.take());
+  let stop_price = stop_price.or_else(|| order.stop_price.take());
 
   let quantity = match (quantity, value) {
     (None, None) => order.quantity,
     (Some(quantity), None) => quantity,
     (None, Some(value)) => value_to_quantity(&client, &order.symbol, &value, limit_price.clone())
       .await
-      .with_context(|| format!("unable to convert value to quantity"))?,
+      .with_context(|| "unable to convert value to quantity")?,
     _ => unreachable!(),
   };
 

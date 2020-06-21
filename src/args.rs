@@ -68,7 +68,7 @@ impl FromStr for TimeInForce {
   type Err = String;
 
   fn from_str(src: &str) -> Result<Self, Self::Err> {
-    return match src {
+    match src {
       "today" => Ok(Self::Today),
       "canceled" => Ok(Self::Canceled),
       "market-open" => Ok(Self::MarketOpen),
