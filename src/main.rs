@@ -210,18 +210,18 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
     | account_activities::ActivityType::InterestAdjustedTefraWithheld => "interested adjusted",
     account_activities::ActivityType::JournalEntry
     | account_activities::ActivityType::JournalEntryCash
-    | account_activities::ActivityType::JournalEntryStock
-    | account_activities::ActivityType::Acquisition
-    | account_activities::ActivityType::NameChange
-    | account_activities::ActivityType::OptionAssignment
-    | account_activities::ActivityType::OptionExpiration
-    | account_activities::ActivityType::OptionExercise
-    | account_activities::ActivityType::PassThruCharge
-    | account_activities::ActivityType::PassThruRebate
-    | account_activities::ActivityType::Reorg
-    | account_activities::ActivityType::SymbolChange
-    | account_activities::ActivityType::StockSpinoff
-    | account_activities::ActivityType::StockSplit => unimplemented!(),
+    | account_activities::ActivityType::JournalEntryStock => unimplemented!(),
+    account_activities::ActivityType::Acquisition => "acquisition",
+    account_activities::ActivityType::NameChange => "name change",
+    account_activities::ActivityType::OptionAssignment => "option assigned",
+    account_activities::ActivityType::OptionExpiration => "option expired",
+    account_activities::ActivityType::OptionExercise => "option exercised",
+    account_activities::ActivityType::PassThruCharge => "pass-through charge",
+    account_activities::ActivityType::PassThruRebate => "pass-through rebate",
+    account_activities::ActivityType::Reorg => "reorganization",
+    account_activities::ActivityType::SymbolChange => "symbol change",
+    account_activities::ActivityType::StockSpinoff => "stock spin-off",
+    account_activities::ActivityType::StockSplit => "stock split",
   }
 }
 

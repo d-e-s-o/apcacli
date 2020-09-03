@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Print textual representation for more account activity types
+
+
 0.1.1
 -----
 - Print ID of changed order for `order change` command
