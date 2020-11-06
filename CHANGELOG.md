@@ -1,6 +1,7 @@
 Unreleased
 ----------
 - Print textual representation for more account activity types
+- Bumped `apca` dependency to `0.16`
 
 
 0.1.1
