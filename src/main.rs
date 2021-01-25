@@ -791,9 +791,16 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     value,
     limit_price,
     stop_price,
+    take_profit_price,
     extended_hours,
     time_in_force,
   } = submit;
+
+  let class = if take_profit_price.is_some() {
+    order::Class::OneTriggersOther
+  } else {
+    order::Class::Simple
+  };
 
   let side = match side {
     Side::Buy => order::Side::Buy,
@@ -810,15 +817,18 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
   };
 
   let type_ = determine_order_type(&limit_price, &stop_price);
+  let take_profit = take_profit_price.map(order::TakeProfit::Limit);
   let time_in_force = time_in_force.to_time_in_force();
 
   // TODO: We should probably support other forms of specifying
   //       the symbol.
   let request = order::OrderReqInit {
+    class,
     type_,
     time_in_force,
     limit_price,
     stop_price,
+    take_profit,
     extended_hours,
     ..Default::default()
   }
@@ -830,6 +840,9 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
     .with_context(|| "failed to submit order")?;
 
   println!("{}", order.id.to_hyphenated_ref());
+  for leg in order.legs {
+    println!("  {}", leg.id.to_hyphenated_ref());
+  }
   Ok(())
 }
 

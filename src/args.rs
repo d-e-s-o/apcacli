@@ -221,6 +221,9 @@ pub struct SubmitOrder {
   /// Create a stop order (or stop limit order) with the given stop price.
   #[structopt(short = "s", long)]
   pub stop_price: Option<Num>,
+  /// Create a one-triggers-other order with the given take-profit price.
+  #[structopt(long)]
+  pub take_profit_price: Option<Num>,
   /// Create an order that is eligible to execute during
   /// pre-market/after hours. Note that only limit orders that are
   /// valid for the day are supported.
