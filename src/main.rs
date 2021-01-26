@@ -941,6 +941,12 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
     .currency;
 
   let order = order.with_context(|| "failed to retrieve order information")?;
+  let legs = order
+    .legs
+    .into_iter()
+    .map(|order| order.id.to_hyphenated_ref().to_string())
+    .collect::<Vec<_>>()
+    .join(",");
 
   println!(r#"{sym}:
   order id:         {id}
@@ -958,7 +964,8 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
   good until:       {good_until}
   limit:            {limit}
   stop:             {stop}
-  extended hours:   {extended_hours}"#,
+  extended hours:   {extended_hours}
+  legs:             {legs}"#,
     sym = order.symbol,
     id = order.id.to_hyphenated_ref(),
     status = format_order_status(order.status),
@@ -1004,6 +1011,7 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
       .unwrap_or_else(|| "N/A".into()),
     good_until = format_time_in_force(order.time_in_force),
     extended_hours = order.extended_hours,
+    legs = if !legs.is_empty() { legs } else { "N/A".into() },
   );
   Ok(())
 }
