@@ -1026,6 +1026,62 @@ where
   slice.iter().fold(0, |m, i| max(m, f(&i)))
 }
 
+/// Print details of an order.
+fn order_print(
+  order: &order::Order,
+  currency: &str,
+  side_max: usize,
+  qty_max: usize,
+  sym_max: usize,
+) -> Result<(), Error> {
+  let quantity = i32::try_from(order.quantity)
+    .with_context(|| format!("order quantity ({}) does not fit into i32", order.quantity))?;
+
+  let summary = match (&order.limit_price, &order.stop_price) {
+    (Some(limit), Some(stop)) => {
+      debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
+      format!(
+        "stop @ {}, limit @ {} = {}",
+        format_price(stop, &currency),
+        format_price(limit, &currency),
+        format_price(&(limit * quantity), &currency)
+      )
+    },
+    (Some(limit), None) => {
+      debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
+      format!(
+        "limit @ {} = {}",
+        format_price(limit, &currency),
+        format_price(&(limit * quantity), &currency)
+      )
+    },
+    (None, Some(stop)) => {
+      debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
+      format!(
+        "stop @ {} = {}",
+        format_price(stop, &currency),
+        format_price(&(stop * quantity), &currency)
+      )
+    },
+    (None, None) => {
+      debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
+      "".to_string()
+    },
+  };
+
+  println!(
+    "{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
+    id = order.id.to_hyphenated_ref(),
+    side_width = side_max,
+    side = format_order_side(order.side),
+    qty_width = qty_max,
+    qty = format!("{:.0}", order.quantity),
+    sym_width = sym_max,
+    sym = order.symbol,
+    summary = summary,
+  );
+  Ok(())
+}
 
 /// List all currently open orders.
 async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
@@ -1053,52 +1109,7 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
   for order in orders {
-    let quantity = i32::try_from(order.quantity)
-      .with_context(|| format!("order quantity ({}) does not fit into i32", order.quantity))?;
-
-    let summary = match (order.limit_price, order.stop_price) {
-      (Some(limit), Some(stop)) => {
-        debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
-        format!(
-          "stop @ {}, limit @ {} = {}",
-          format_price(&stop, &currency),
-          format_price(&limit, &currency),
-          format_price(&(&limit * quantity), &currency)
-        )
-      },
-      (Some(limit), None) => {
-        debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
-        format!(
-          "limit @ {} = {}",
-          format_price(&limit, &currency),
-          format_price(&(limit * quantity), &currency)
-        )
-      },
-      (None, Some(stop)) => {
-        debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
-        format!(
-          "stop @ {} = {}",
-          format_price(&stop, &currency),
-          format_price(&(stop * quantity), &currency)
-        )
-      },
-      (None, None) => {
-        debug_assert!(order.type_ == order::Type::Market, "{:?}", order.type_);
-        "".to_string()
-      },
-    };
-
-    println!(
-      "{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
-      id = order.id.to_hyphenated_ref(),
-      side_width = side_max,
-      side = format_order_side(order.side),
-      qty_width = qty_max,
-      qty = format!("{:.0}", order.quantity),
-      sym_width = sym_max,
-      sym = order.symbol,
-      summary = summary,
-    )
+    order_print(&order, &currency, side_max, qty_max, sym_max)?;
   }
   Ok(())
 }
