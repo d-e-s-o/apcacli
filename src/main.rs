@@ -1029,6 +1029,7 @@ where
 /// Print details of an order.
 fn order_print(
   order: &order::Order,
+  indent: &str,
   currency: &str,
   side_max: usize,
   qty_max: usize,
@@ -1070,7 +1071,8 @@ fn order_print(
   };
 
   println!(
-    "{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
+    "{indent}{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
+    indent = indent,
     id = order.id.to_hyphenated_ref(),
     side_width = side_max,
     side = format_order_side(order.side),
@@ -1109,7 +1111,10 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
   let sym_max = max_width(&orders, |p| p.symbol.len());
 
   for order in orders {
-    order_print(&order, &currency, side_max, qty_max, sym_max)?;
+    order_print(&order, "", &currency, side_max, qty_max, sym_max)?;
+    for leg in order.legs {
+      order_print(&leg, "  ", &currency, side_max, qty_max, sym_max)?;
+    }
   }
   Ok(())
 }
