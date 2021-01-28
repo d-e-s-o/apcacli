@@ -18,6 +18,7 @@ keywords = ["cli", "trading", "finance", "async", "stocks"]
 description = """
 A command line tool for trading stocks on Alpaca (alpaca.markets).
 """
+default-run = "apcacli"
 
 [badges]
 gitlab = { repository = "d-e-s-o/apcacli", branch = "master" }
