@@ -6,6 +6,7 @@ Unreleased
 - Print leg orders in `order get` and `order list` commands
 - Bumped minimum supported Rust version to `1.44`
 - Bumped `apca` dependency to `0.16`
+- Bumped `tracing-subscriber` dependency to `0.2`
 
 
 0.1.1

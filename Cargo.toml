@@ -37,6 +37,6 @@ serde_json = {version = "1.0", default-features = false, features = ["raw_value"
 structopt = {version = "0.3", default-features = false}
 tokio = {version = "0.2", default-features = false, features = ["rt-core"]}
 tracing = {version = "0.1", default-features = false, features = ["std"]}
-tracing-subscriber = {version = "0.1.6", default-features = false, features = ["ansi", "chrono", "env-filter", "fmt"]}
+tracing-subscriber = {version = "0.2", default-features = false, features = ["ansi", "chrono", "env-filter", "fmt"]}
 uuid = {version = "0.8", features = ["v4"]}
 yansi = {version = "0.5", default-features = false}
