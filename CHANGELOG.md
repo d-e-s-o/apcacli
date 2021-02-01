@@ -5,7 +5,8 @@ Unreleased
 - Print textual representation for more account activity types
 - Print leg orders in `order get` and `order list` commands
 - Bumped minimum supported Rust version to `1.44`
-- Bumped `apca` dependency to `0.16`
+- Bumped `apca` dependency to `0.17`
+- Bumped `tokio` dependency to `1.0`
 - Bumped `tracing-subscriber` dependency to `0.2`
 
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2019-2021 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
@@ -58,7 +58,7 @@ use serde_json::value::RawValue;
 
 use structopt::StructOpt;
 
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
 use tracing_subscriber::filter::LevelFilter;
@@ -559,6 +559,7 @@ fn format_trade_status(status: events::TradeStatus) -> &'static str {
     events::TradeStatus::Rejected => "rejected",
     events::TradeStatus::Suspended => "suspended",
     events::TradeStatus::PendingNew => "pending new",
+    events::TradeStatus::PendingReplace => "pending replace",
     events::TradeStatus::Calculated => "calculated",
     events::TradeStatus::Unknown => "unknown",
   }
@@ -908,6 +909,9 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
       let request = orders::OrdersReq {
         status: orders::Status::Open,
         limit: 500,
+        // No need to retrieve nested orders here, they should be
+        // canceled automatically when the "parent" is canceled.
+        nested: false,
       };
       let orders = client
         .issue::<orders::Get>(request)
@@ -1094,6 +1098,7 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
       orders::Status::Open
     },
     limit: 500,
+    nested: true,
   };
 
   let currency = client.issue::<account::Get>(());
@@ -1459,7 +1464,11 @@ async fn run() -> Result<(), Error> {
 }
 
 fn main() {
-  let mut rt = Runtime::new().unwrap();
+  let rt = Builder::new_current_thread()
+    .enable_io()
+    .enable_time()
+    .build()
+    .unwrap();
   let exit_code = rt
     .block_on(run())
     .map(|_| 0)
