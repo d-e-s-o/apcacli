@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Bumped minimum supported Rust version to `1.46`
+
+
 0.1.2
 -----
 - Added support for one-trigger-other order with take-profit leg via
