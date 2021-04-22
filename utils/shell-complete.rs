@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(
@@ -20,10 +20,10 @@ mod apcacli {
 
 /// Generate a bash completion script for apcacli.
 #[derive(Debug, StructOpt)]
-pub struct Args {
+struct Args {
   /// The command for which to generate the bash completion script.
   #[structopt(default_value = "apcacli")]
-  pub command: String,
+  command: String,
 }
 
 
