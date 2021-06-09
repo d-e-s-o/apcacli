@@ -1,5 +1,7 @@
 Unreleased
 ----------
+- Added support for generating completion scripts for shells other than
+  `bash`
 - Bumped minimum supported Rust version to `1.46`
 
 

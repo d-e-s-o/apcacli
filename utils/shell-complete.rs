@@ -18,10 +18,13 @@ mod apcacli {
 }
 
 
-/// Generate a bash completion script for apcacli.
+/// Generate a shell completion script for apcacli.
 #[derive(Debug, StructOpt)]
 struct Args {
-  /// The command for which to generate the bash completion script.
+  /// The shell for which to generate a completion script for.
+  #[structopt(possible_values = &Shell::variants())]
+  shell: Shell,
+  /// The command for which to generate the shell completion script.
   #[structopt(default_value = "apcacli")]
   command: String,
 }
@@ -30,5 +33,5 @@ struct Args {
 fn main() {
   let args = Args::from_args();
   let mut app = apcacli::Args::clap();
-  app.gen_completions_to(&args.command, Shell::Bash, &mut stdout());
+  app.gen_completions_to(&args.command, args.shell, &mut stdout());
 }
