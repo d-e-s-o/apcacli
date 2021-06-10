@@ -594,6 +594,7 @@ fn format_order_type(type_: order::Type) -> &'static str {
     order::Type::Limit => "limit",
     order::Type::Stop => "stop",
     order::Type::StopLimit => "stop-limit",
+    order::Type::TrailingStop => "trailing-stop",
   }
 }
 
@@ -879,12 +880,13 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
     _ => unreachable!(),
   };
 
-  let request = order::ChangeReq {
+  let request = order::ChangeReqInit {
     quantity,
     time_in_force,
     limit_price,
     stop_price,
-  };
+    ..Default::default()
+  }.init();
 
   let order = client
     .issue::<order::Patch>((id.0, request))
