@@ -28,11 +28,11 @@ name = "shell-complete"
 path = "utils/shell-complete.rs"
 
 [dependencies]
-apca = "0.18"
+apca = "0.19"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
-num-decimal = "0.2"
+num-decimal = {version = "0.2.4", default-features = false, features = ["num-v04"]}
 serde_json = {version = "1.0", default-features = false, features = ["raw_value"]}
 structopt = {version = "0.3", default-features = false}
 tokio = {version = "1.0", default-features = false, features = ["rt"]}

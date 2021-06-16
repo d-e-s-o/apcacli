@@ -126,7 +126,7 @@ async fn account(client: Client, account: Account) -> Result<(), Error> {
 /// Print information about the account.
 async fn account_get(client: Client) -> Result<(), Error> {
   let account = client
-    .issue::<account::Get>(())
+    .issue::<account::Get>(&())
     .await
     .with_context(|| "failed to retrieve account information")?;
 
@@ -194,8 +194,8 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
     account_activities::ActivityType::Miscellaneous => "miscellaneous",
     account_activities::ActivityType::AcatsInOutCash
     | account_activities::ActivityType::AcatsInOutSecurities => "transfer",
-    account_activities::ActivityType::CashDisbursement
-    | account_activities::ActivityType::CashReceipt => "cash",
+    account_activities::ActivityType::CashDeposit
+    | account_activities::ActivityType::CashWithdrawal => "cash",
     account_activities::ActivityType::CapitalGainLongTerm
     | account_activities::ActivityType::CapitalGainShortTerm => "capital gains",
     account_activities::ActivityType::Dividend
@@ -222,6 +222,8 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
     account_activities::ActivityType::SymbolChange => "symbol change",
     account_activities::ActivityType::StockSpinoff => "stock spin-off",
     account_activities::ActivityType::StockSplit => "stock split",
+    account_activities::ActivityType::Fee => "regulatory fee",
+    account_activities::ActivityType::Unknown => unreachable!(),
   }
 }
 
@@ -252,8 +254,8 @@ fn sort_account_activity(activities: &mut Vec<account_activities::Activity>) {
 /// Retrieve account activity.
 async fn account_activity_get(client: Client) -> Result<(), Error> {
   let request = account_activities::ActivityReq::default();
-  let currency = client.issue::<account::Get>(());
-  let activity = client.issue::<account_activities::Get>(request);
+  let currency = client.issue::<account::Get>(&());
+  let activity = client.issue::<account_activities::Get>(&request);
 
   let (currency, activity) = join!(currency, activity);
   let currency = currency
@@ -307,7 +309,7 @@ fn format_trade_confirmation(confirmation: account_config::TradeConfirmation) ->
 /// Retrieve the account configuration.
 async fn account_config_get(client: Client) -> Result<(), Error> {
   let config = client
-    .issue::<account_config::Get>(())
+    .issue::<account_config::Get>(&())
     .await
     .with_context(|| "failed to retrieve account configuration")?;
 
@@ -325,7 +327,7 @@ async fn account_config_get(client: Client) -> Result<(), Error> {
 /// Modify the account configuration.
 async fn account_config_set(client: Client, set: ConfigSet) -> Result<(), Error> {
   let mut config = client
-    .issue::<account_config::Get>(())
+    .issue::<account_config::Get>(&())
     .await
     .with_context(|| "failed to retrieve account configuration")?;
 
@@ -360,7 +362,7 @@ async fn account_config_set(client: Client, set: ConfigSet) -> Result<(), Error>
   };
 
   let _ = client
-    .issue::<account_config::Patch>(config)
+    .issue::<account_config::Patch>(&config)
     .await
     .with_context(|| "failed to update account configuration")?;
   Ok(())
@@ -378,7 +380,7 @@ async fn asset(client: Client, asset: Asset) -> Result<(), Error> {
 /// Print information about the asset with the given symbol.
 async fn asset_get(client: Client, symbol: Symbol) -> Result<(), Error> {
   let asset = client
-    .issue::<asset::Get>(symbol.0.clone())
+    .issue::<asset::Get>(&symbol.0)
     .await
     .with_context(|| format!("failed to retrieve asset information for {}", symbol.0))?;
 
@@ -411,7 +413,7 @@ async fn asset_list(client: Client) -> Result<(), Error> {
     class: asset::Class::UsEquity,
   };
   let mut assets = client
-    .issue::<assets::Get>(request)
+    .issue::<assets::Get>(&request)
     .await
     .with_context(|| "failed to retrieve asset list")?;
 
@@ -685,7 +687,7 @@ async fn events(client: Client, events: Events) -> Result<(), Error> {
 /// Print the current market status.
 async fn market(client: Client) -> Result<(), Error> {
   let clock = client
-    .issue::<clock::Get>(())
+    .issue::<clock::Get>(&())
     .await
     .with_context(|| "failed to retrieve market clock")?;
 
@@ -721,7 +723,7 @@ async fn value_to_quantity(
       };
 
       let mut response = client
-        .issue::<bars::Get>((bars::TimeFrame::OneMinute, request))
+        .issue::<bars::Get>(&(bars::TimeFrame::OneMinute, request))
         .await
         .with_context(|| format!("failed to retrieve current market value of {}", symbol))?;
 
@@ -837,7 +839,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
   .init(symbol, side, quantity);
 
   let order = client
-    .issue::<order::Post>(request)
+    .issue::<order::Post>(&request)
     .await
     .with_context(|| "failed to submit order")?;
 
@@ -861,7 +863,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
   } = change;
 
   let mut order = client
-    .issue::<order::Get>(id.0)
+    .issue::<order::Get>(&id.0)
     .await
     .with_context(|| format!("failed to retrieve order {}", id.0.to_hyphenated_ref()))?;
 
@@ -889,7 +891,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
   }.init();
 
   let order = client
-    .issue::<order::Patch>((id.0, request))
+    .issue::<order::Patch>(&(id.0, request))
     .await
     .with_context(|| format!("failed to change order {}", id.0.to_hyphenated_ref()))?;
 
@@ -902,7 +904,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
 async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> {
   match cancel {
     CancelOrder::ById(id) => client
-      .issue::<order::Delete>(id.0)
+      .issue::<order::Delete>(&id.0)
       .await
       .with_context(|| "failed to cancel order"),
     CancelOrder::All => {
@@ -916,14 +918,15 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
         nested: false,
       };
       let orders = client
-        .issue::<orders::Get>(request)
+        .issue::<orders::Get>(&request)
         .await
         .with_context(|| "failed to list orders")?;
 
       orders
         .into_iter()
         .map(|order| {
-          client.issue::<order::Delete>(order.id).map_err(move |e| {
+          let id = order.id;
+          client.issue::<order::Delete>(&id).map_err(move |e| {
             let id = order.id.to_hyphenated_ref();
             Error::new(e).context(format!("failed to cancel order {}", id))
           })
@@ -938,8 +941,8 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
 
 /// Retrieve information about an order.
 async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
-  let currency = client.issue::<account::Get>(());
-  let order = client.issue::<order::Get>(id.0);
+  let currency = client.issue::<account::Get>(&());
+  let order = client.issue::<order::Get>(&id.0);
 
   let (currency, order) = join!(currency, order);
   let currency = currency
@@ -1103,8 +1106,8 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
     nested: true,
   };
 
-  let currency = client.issue::<account::Get>(());
-  let orders = client.issue::<orders::Get>(request);
+  let currency = client.issue::<account::Get>(&());
+  let orders = client.issue::<orders::Get>(&request);
 
   let (currency, orders) = join!(currency, orders);
   let currency = currency
@@ -1145,8 +1148,8 @@ fn format_position_side(side: position::Side) -> &'static str {
 
 /// Retrieve and print a position for a given symbol.
 async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
-  let currency = client.issue::<account::Get>(());
-  let position = client.issue::<position::Get>(symbol.0.clone());
+  let currency = client.issue::<account::Get>(&());
+  let position = client.issue::<position::Get>(&symbol.0);
 
   let (currency, position) = join!(currency, position);
   let currency = currency
@@ -1189,8 +1192,8 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
 
 /// Liquidate a position for a certain asset.
 async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
-  let currency = client.issue::<account::Get>(());
-  let order = client.issue::<position::Delete>(symbol.0.clone());
+  let currency = client.issue::<account::Get>(&());
+  let order = client.issue::<position::Delete>(&symbol.0);
 
   let (currency, order) = join!(currency, order);
   let currency = currency
@@ -1421,8 +1424,8 @@ fn position_print(positions: &[position::Position], currency: &str) {
 
 /// List all currently open positions.
 async fn position_list(client: Client) -> Result<(), Error> {
-  let account = client.issue::<account::Get>(());
-  let positions = client.issue::<positions::Get>(());
+  let account = client.issue::<account::Get>(&());
+  let positions = client.issue::<positions::Get>(&());
 
   let (account, positions) = join!(account, positions);
   let account = account.with_context(|| "failed to retrieve account information")?;
