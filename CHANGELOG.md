@@ -3,6 +3,7 @@ Unreleased
 - Added support for generating completion scripts for shells other than
   `bash`
 - Bumped minimum supported Rust version to `1.46`
+- Bumped `apca` dependency to `0.18`
 
 
 0.1.2
