@@ -15,10 +15,8 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::io::stdout;
 use std::io::Write;
+use std::ops::Deref as _;
 use std::process::exit;
-use std::time::SystemTime;
-use std::time::SystemTimeError;
-use std::time::UNIX_EPOCH;
 
 use apca::api::v2::account;
 use apca::api::v2::account_activities;
@@ -41,7 +39,6 @@ use anyhow::Context;
 use anyhow::Error;
 
 use chrono::offset::Local;
-use chrono::offset::TimeZone;
 use chrono::offset::Utc;
 use chrono::DateTime;
 
@@ -84,6 +81,10 @@ use crate::args::Position;
 use crate::args::Side;
 use crate::args::SubmitOrder;
 use crate::args::Symbol;
+
+
+/// The string type we use on many occasions.
+type Str = Cow<'static, str>;
 
 
 // A replacement of the standard println!() macro that does not panic
@@ -268,7 +269,7 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
     match activity {
       account_activities::Activity::Trade(trade) => {
         println!(r#"{time}  {side} {qty} {sym} @ {price} = {total}"#,
-          time = format_time_short(&trade.transaction_time),
+          time = format_local_time_short(trade.transaction_time),
           side = format_activity_side(trade.side),
           qty = trade.quantity,
           sym = trade.symbol,
@@ -278,7 +279,7 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
       },
       account_activities::Activity::NonTrade(non_trade) => {
         println!(r#"{date:19}  {activity} {amount}"#,
-          date = format_date(&non_trade.date),
+          date = format_date(non_trade.date),
           activity = format_activity_type(non_trade.type_),
           amount = format_price(&non_trade.net_amount, &currency),
         );
@@ -432,45 +433,23 @@ async fn asset_list(client: Client) -> Result<(), Error> {
   Ok(())
 }
 
-/// Convert a `SystemTime` into a `DateTime`.
-fn convert_time(time: &SystemTime) -> Result<DateTime<Utc>, SystemTimeError> {
-  time.duration_since(UNIX_EPOCH).map(|duration| {
-    let secs = duration.as_secs().try_into().unwrap();
-    let nanos = duration.subsec_nanos();
-    let time = Utc.timestamp(secs, nanos);
-    time
-  })
+/// Format a date time as per RFC 2822, after converting to local date
+/// time.
+fn format_local_time(time: DateTime<Utc>) -> Str {
+  DateTime::<Local>::from(time).to_rfc2822().into()
 }
 
-/// Convert a `SystemTime` into a `DateTime` according to the local time.
-fn convert_local_time(time: &SystemTime) -> Result<DateTime<Local>, SystemTimeError> {
-  time.duration_since(UNIX_EPOCH).map(|duration| {
-    let secs = duration.as_secs().try_into().unwrap();
-    let nanos = duration.subsec_nanos();
-    let time = Local.timestamp(secs, nanos);
-    time
-  })
+/// Format a date time, after converting to local date time.
+fn format_local_time_short(time: DateTime<Utc>) -> Str {
+  DateTime::<Local>::from(time)
+    .format("%Y-%m-%d %H:%M:%S")
+    .to_string()
+    .into()
 }
 
-/// Format a system time as per RFC 2822.
-fn format_time(time: &SystemTime) -> Cow<'static, str> {
-  convert_local_time(time)
-    .map(|time| time.to_rfc2822().into())
-    .unwrap_or_else(|_| "N/A".into())
-}
-
-/// Format a system time as per RFC 2822.
-fn format_time_short(time: &SystemTime) -> Cow<'static, str> {
-  convert_local_time(time)
-    .map(|time| time.format("%Y-%m-%d %H:%M:%S").to_string().into())
-    .unwrap_or_else(|_| "N/A".into())
-}
-
-/// Format a system time as a date.
-fn format_date(time: &SystemTime) -> Cow<'static, str> {
-  convert_time(time)
-    .map(|time| time.date().format("%Y-%m-%d").to_string().into())
-    .unwrap_or_else(|_| "N/A".into())
+/// Format a date time as a date.
+fn format_date(time: DateTime<Utc>) -> Str {
+  time.date().format("%Y-%m-%d").to_string().into()
 }
 
 
@@ -520,18 +499,15 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
           status = update.status,
           created = update
             .created_at
-            .as_ref()
-            .map(format_time)
+            .map(format_local_time)
             .unwrap_or_else(|| "N/A".into()),
           updated = update
             .updated_at
-            .as_ref()
-            .map(format_time)
+            .map(format_local_time)
             .unwrap_or_else(|| "N/A".into()),
           deleted = update
             .deleted_at
-            .as_ref()
-            .map(format_time)
+            .map(format_local_time)
             .unwrap_or_else(|| "N/A".into()),
           cash = format_price(&update.cash, &update.currency),
           withdrawable = format_price(&update.withdrawable_cash, &update.currency),
@@ -697,9 +673,9 @@ async fn market(client: Client) -> Result<(), Error> {
   next open:    {next_open}
   next close:   {next_close}"#,
     open = clock.open,
-    current = format_time(&clock.current),
-    next_open = format_time(&clock.next_open),
-    next_close = format_time(&clock.next_close),
+    current = format_local_time(clock.current),
+    next_open = format_local_time(clock.next_open),
+    next_close = format_local_time(clock.next_close),
   );
   Ok(())
 }
@@ -978,46 +954,33 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
     sym = order.symbol,
     id = order.id.to_hyphenated_ref(),
     status = format_order_status(order.status),
-    created = format_time(&order.created_at),
+    created = format_local_time(order.created_at),
     submitted = order
       .submitted_at
-      .as_ref()
-      .map(format_time)
+      .map(format_local_time)
       .unwrap_or_else(|| "N/A".into()),
     updated = order
       .updated_at
-      .as_ref()
-      .map(format_time)
+      .map(format_local_time)
       .unwrap_or_else(|| "N/A".into()),
     filled = order
       .filled_at
-      .as_ref()
-      .map(format_time)
+      .map(format_local_time)
       .unwrap_or_else(|| "N/A".into()),
     expired = order
       .expired_at
-      .as_ref()
-      .map(format_time)
+      .map(format_local_time)
       .unwrap_or_else(|| "N/A".into()),
     canceled = order
       .canceled_at
-      .as_ref()
-      .map(format_time)
+      .map(format_local_time)
       .unwrap_or_else(|| "N/A".into()),
     quantity = order.quantity,
     filled_qty = order.filled_quantity,
     type_ = format_order_type(order.type_),
     side = format_order_side(order.side),
-    limit = order
-      .limit_price
-      .as_ref()
-      .map(|price| format_price(price, &currency))
-      .unwrap_or_else(|| "N/A".into()),
-    stop = order
-      .stop_price
-      .as_ref()
-      .map(|price| format_price(price, &currency))
-      .unwrap_or_else(|| "N/A".into()),
+    limit = format_option_price(&order.limit_price, &currency),
+    stop = format_option_price(&order.stop_price, &currency),
     good_until = format_time_in_force(order.time_in_force),
     extended_hours = order.extended_hours,
     legs = if !legs.is_empty() { legs } else { "N/A".into() },
@@ -1176,14 +1139,14 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
     entry = format_price(&position.average_entry_price, &currency),
     qty = position.quantity,
     side = format_position_side(position.side),
-    value = format_price(&position.market_value, &currency),
+    value = format_option_price(&position.market_value, &currency),
     cost_basis = format_price(&position.cost_basis, &currency),
-    unrealized_gain = format_gain(&position.unrealized_gain_total, &currency),
-    unrealized_gain_pct = format_percent_gain(&position.unrealized_gain_total_percent),
-    unrealized_gain_today = format_gain(&position.unrealized_gain_today, &currency),
-    unrealized_gain_today_pct = format_percent_gain(&position.unrealized_gain_today_percent),
-    current_price = format_price(&position.current_price, &currency),
-    last_price = format_price(&position.last_day_price, &currency),
+    unrealized_gain = format_option_gain(&position.unrealized_gain_total, &currency),
+    unrealized_gain_pct = format_option_percent_gain(&position.unrealized_gain_total_percent),
+    unrealized_gain_today = format_option_gain(&position.unrealized_gain_today, &currency),
+    unrealized_gain_today_pct = format_option_percent_gain(&position.unrealized_gain_today_percent),
+    current_price = format_option_price(&position.current_price, &currency),
+    last_price = format_option_price(&position.last_day_price, &currency),
   );
 
   Ok(())
@@ -1217,29 +1180,29 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
     filled = order.filled_quantity,
     type_ = format_order_type(order.type_),
     side = format_order_side(order.side),
-    limit = order
-      .limit_price
-      .as_ref()
-      .map(|price| format_price(price, &currency))
-      .unwrap_or_else(|| "N/A".into()),
-    stop = order
-      .stop_price
-      .as_ref()
-      .map(|price| format_price(price, &currency))
-      .unwrap_or_else(|| "N/A".into()),
+    limit = format_option_price(&order.limit_price, &currency),
+    stop = format_option_price(&order.stop_price, &currency),
   );
   Ok(())
 }
 
 
 /// Format a price value.
-fn format_price(price: &Num, currency: &str) -> String {
-  format!("{:.2} {}", price, currency)
+fn format_price(price: &Num, currency: &str) -> Str {
+  format!("{:.2} {}", price, currency).into()
 }
 
-fn format_colored<F>(value: &Num, format: F) -> Paint<String>
+/// Format an optional price value.
+fn format_option_price(price: &Option<Num>, currency: &str) -> Str {
+  price
+    .as_ref()
+    .map(|price| format_price(price, currency))
+    .unwrap_or_else(|| "N/A".into())
+}
+
+fn format_colored<F>(value: &Num, format: F) -> Paint<Str>
 where
-  F: Fn(&Num) -> String,
+  F: Fn(&Num) -> Str,
 {
   if value.is_positive() {
     Paint::rgb(0x00, 0x70, 0x00, format(value))
@@ -1251,19 +1214,44 @@ where
 }
 
 /// Format gain.
-fn format_gain(price: &Num, currency: &str) -> Paint<String> {
+fn format_gain(price: &Num, currency: &str) -> Paint<Str> {
   format_colored(price, |price| format_price(price, currency))
+}
+
+/// Format an optional gain.
+fn format_option_gain(price: &Option<Num>, currency: &str) -> Paint<Str> {
+  price
+    .as_ref()
+    .map(|price| format_gain(price, currency))
+    .unwrap_or_else(|| Paint::default("N/A".into()))
 }
 
 
 /// Format a percentage value.
-fn format_percent(percent: &Num) -> String {
-  format!("{:.2}%", percent * 100)
+fn format_percent(percent: &Num) -> Str {
+  format!("{:.2}%", percent * 100).into()
 }
 
+/// Format an optional percent value.
+fn format_option_percent(percent: &Option<Num>) -> Str {
+  percent
+    .as_ref()
+    .map(|percent| format_percent(percent))
+    .unwrap_or_else(|| "N/A".into())
+}
+
+
 /// Format percent gain.
-fn format_percent_gain(percent: &Num) -> Paint<String> {
+fn format_percent_gain(percent: &Num) -> Paint<Str> {
   format_colored(percent, format_percent)
+}
+
+/// Format an optional percent gain.
+fn format_option_percent_gain(percent: &Option<Num>) -> Paint<Str> {
+  percent
+    .as_ref()
+    .map(|percent| format_percent_gain(percent))
+    .unwrap_or_else(|| Paint::default("N/A".into()))
 }
 
 
@@ -1284,32 +1272,36 @@ fn position_print(positions: &[position::Position], currency: &str) {
   });
   let sym_max = max_width(&positions, |p| p.symbol.len());
   let price_max = max_width(&positions, |p| {
-    format_price(&p.current_price, currency).len()
+    format_option_price(&p.current_price, currency).len()
   });
   let value_max = max_width(&positions, |p| {
-    format_price(&p.market_value, currency).len()
+    format_option_price(&p.market_value, currency).len()
   });
   let entry_max = max_width(&positions, |p| {
     format_price(&p.average_entry_price, currency).len()
   });
   let today_max = max_width(&positions, |p| {
-    format_price(&p.unrealized_gain_today, currency).len()
+    format_option_price(&p.unrealized_gain_today, currency).len()
   });
   let today_pct_max = max_width(&positions, |p| {
-    format_percent(&p.unrealized_gain_today_percent).len()
+    format_option_percent(&p.unrealized_gain_today_percent).len()
   });
   let total_max = max_width(&positions, |p| {
-    format_price(&p.unrealized_gain_total, currency).len()
+    format_option_price(&p.unrealized_gain_total, currency).len()
   });
   let total_pct_max = max_width(&positions, |p| {
-    format_percent(&p.unrealized_gain_total_percent).len()
+    format_option_percent(&p.unrealized_gain_total_percent).len()
   });
 
   // We also need to take the total values into consideration for the
   // maximum width calculation.
-  let today_gain = positions
-    .iter()
-    .fold(Num::default(), |acc, p| acc + &p.unrealized_gain_today);
+  let today_gain = positions.iter().fold(Num::default(), |acc, p| {
+    if let Some(gain) = &p.unrealized_gain_today {
+      acc + gain
+    } else {
+      acc
+    }
+  });
   let base_value = positions.iter().fold(Num::default(), |acc, p| {
     acc
       + if p.side == position::Side::Short {
@@ -1319,11 +1311,16 @@ fn position_print(positions: &[position::Position], currency: &str) {
       }
   });
   let total_value = positions.iter().fold(Num::default(), |acc, p| {
+    let gain = p
+      .unrealized_gain_total
+      .as_ref()
+      .map(Cow::Borrowed)
+      .unwrap_or_else(|| Cow::Owned(Num::from(0)));
     acc
       + if p.side == position::Side::Short {
-        -&p.cost_basis + &p.unrealized_gain_total
+        -&p.cost_basis + gain.deref()
       } else {
-        &p.cost_basis + &p.unrealized_gain_total
+        &p.cost_basis + gain.deref()
       }
   });
   let total_gain = &total_value - &base_value;
@@ -1377,19 +1374,19 @@ fn position_print(positions: &[position::Position], currency: &str) {
       sym_width = sym_max,
       sym = position.symbol,
       price_width = price_max,
-      price = format_price(&position.current_price, currency),
+      price = format_option_price(&position.current_price, currency),
       value_width = value_max,
-      value = format_price(&position.market_value, currency),
+      value = format_option_price(&position.market_value, currency),
       entry_width = entry_max,
       entry = format_price(&position.average_entry_price, currency),
       today_width = today_max,
-      today = format_gain(&position.unrealized_gain_today, currency),
+      today = format_option_gain(&position.unrealized_gain_today, currency),
       today_pct_width = today_pct_max,
-      today_pct = format_percent_gain(&position.unrealized_gain_today_percent),
+      today_pct = format_option_percent_gain(&position.unrealized_gain_today_percent),
       total_width = total_max,
-      total = format_gain(&position.unrealized_gain_total, currency),
+      total = format_option_gain(&position.unrealized_gain_total, currency),
       total_pct_width = total_pct_max,
-      total_pct = format_percent_gain(&position.unrealized_gain_total_percent),
+      total_pct = format_option_percent_gain(&position.unrealized_gain_total_percent),
     )
   }
 
