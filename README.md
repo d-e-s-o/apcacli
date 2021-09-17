@@ -84,23 +84,27 @@ $ apcacli position list
 More commands are available and can be discovered using the help.
 
 The program is powered by the [`apca`][apca] crate and written in Rust.
-It comes with bash completion support and automatic coloring of
+It comes with shell completion support and automatic coloring of
 profit/losses.
 
 
-### Bash Completion
-As mentioned earlier, **apcacli** comes with Bash completion support. A
-completion script can be generated via the `shell-complete` utility
-program and then only needs to be sourced to make the current shell
-provide context-sensitive tab completion support.
+### Shell Completion
+As mentioned earlier, **apcacli** comes with shell completion support
+(for various shells). A completion script can be generated via the
+`shell-complete` utility program and then only needs to be sourced to
+make the current shell provide context-sensitive tab completion support.
+E.g.,
 ```bash
 $ cargo run --bin=shell-complete > apcacli.bash
 $ source apcacli.bash
 ```
 
 The generated completion script can be installed system-wide as usual
-and sourced through Bash initialization files, such as `~/.bashrc`.
+and sourced through initialization files, such as `~/.bashrc`.
 
+Completion scripts for other shells work in a similar manner. Please
+refer to the help text (`--help`) of the `shell-complete` program for
+the list of supported shells.
 
 [alpaca.markets]: https://alpaca.markets
 [apca]: https://crates.io/crates/apca
