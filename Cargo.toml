@@ -20,6 +20,13 @@ A command line tool for trading stocks on Alpaca (alpaca.markets).
 """
 default-run = "apcacli"
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+incremental = false
+panic = "abort"
+
 [[bin]]
 name = "shell-complete"
 path = "utils/shell-complete.rs"
