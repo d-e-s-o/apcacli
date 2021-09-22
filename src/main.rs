@@ -475,7 +475,7 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
         async {
           let update = result.unwrap();
           // TODO: We should honor the write result.
-          let _result = stdout().write(&update.get().as_bytes());
+          let _result = stdout().write(update.get().as_bytes());
           Ok(())
         }
       })
@@ -614,7 +614,7 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
       .try_for_each(|result| async {
         let update = result.unwrap();
         // TODO: We should honor the write result.
-        let _result = stdout().write(&update.get().as_bytes());
+        let _result = stdout().write(update.get().as_bytes());
         Ok(())
       })
       .await?;
@@ -995,7 +995,7 @@ fn max_width<T, F>(slice: &[T], f: F) -> usize
 where
   F: Fn(&T) -> usize,
 {
-  slice.iter().fold(0, |m, i| max(m, f(&i)))
+  slice.iter().fold(0, |m, i| max(m, f(i)))
 }
 
 /// Print details of an order.
@@ -1015,25 +1015,25 @@ fn order_print(
       debug_assert!(order.type_ == order::Type::StopLimit, "{:?}", order.type_);
       format!(
         "stop @ {}, limit @ {} = {}",
-        format_price(stop, &currency),
-        format_price(limit, &currency),
-        format_price(&(limit * quantity), &currency)
+        format_price(stop, currency),
+        format_price(limit, currency),
+        format_price(&(limit * quantity), currency)
       )
     },
     (Some(limit), None) => {
       debug_assert!(order.type_ == order::Type::Limit, "{:?}", order.type_);
       format!(
         "limit @ {} = {}",
-        format_price(limit, &currency),
-        format_price(&(limit * quantity), &currency)
+        format_price(limit, currency),
+        format_price(&(limit * quantity), currency)
       )
     },
     (None, Some(stop)) => {
       debug_assert!(order.type_ == order::Type::Stop, "{:?}", order.type_);
       format!(
         "stop @ {} = {}",
-        format_price(stop, &currency),
-        format_price(&(stop * quantity), &currency)
+        format_price(stop, currency),
+        format_price(&(stop * quantity), currency)
       )
     },
     (None, None) => {
@@ -1267,29 +1267,29 @@ fn format_position_quantity(quantity: u64, side: position::Side) -> String {
 
 /// Print a table with the given positions.
 fn position_print(positions: &[position::Position], currency: &str) {
-  let qty_max = max_width(&positions, |p| {
+  let qty_max = max_width(positions, |p| {
     format_position_quantity(p.quantity, p.side).len()
   });
-  let sym_max = max_width(&positions, |p| p.symbol.len());
-  let price_max = max_width(&positions, |p| {
+  let sym_max = max_width(positions, |p| p.symbol.len());
+  let price_max = max_width(positions, |p| {
     format_option_price(&p.current_price, currency).len()
   });
-  let value_max = max_width(&positions, |p| {
+  let value_max = max_width(positions, |p| {
     format_option_price(&p.market_value, currency).len()
   });
-  let entry_max = max_width(&positions, |p| {
+  let entry_max = max_width(positions, |p| {
     format_price(&p.average_entry_price, currency).len()
   });
-  let today_max = max_width(&positions, |p| {
+  let today_max = max_width(positions, |p| {
     format_option_price(&p.unrealized_gain_today, currency).len()
   });
-  let today_pct_max = max_width(&positions, |p| {
+  let today_pct_max = max_width(positions, |p| {
     format_option_percent(&p.unrealized_gain_today_percent).len()
   });
-  let total_max = max_width(&positions, |p| {
+  let total_max = max_width(positions, |p| {
     format_option_price(&p.unrealized_gain_total, currency).len()
   });
-  let total_pct_max = max_width(&positions, |p| {
+  let total_pct_max = max_width(positions, |p| {
     format_option_percent(&p.unrealized_gain_total_percent).len()
   });
 
