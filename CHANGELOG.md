@@ -2,6 +2,7 @@ Unreleased
 ----------
 - Added support for generating completion scripts for shells other than
   `bash`
+- Added time-in-force column to `order list` command
 - Bumped minimum supported Rust version to `1.46`
 - Bumped `apca` dependency to `0.20`
 

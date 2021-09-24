@@ -592,6 +592,16 @@ fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
   }
 }
 
+/// Format a `TimeInForce` value as a short three letter acronym.
+fn format_time_in_force_short(time_in_force: order::TimeInForce) -> &'static str {
+  match time_in_force {
+    order::TimeInForce::Day => "day",
+    order::TimeInForce::UntilCanceled => "gtc",
+    order::TimeInForce::UntilMarketOpen => "opn",
+    order::TimeInForce::UntilMarketClose => "cls",
+  }
+}
+
 
 /// A helper for receiving raw JSON trade updates.
 enum RawTradeUpdates {}
@@ -1009,6 +1019,7 @@ fn order_print(
 ) -> Result<(), Error> {
   let quantity = i32::try_from(order.quantity)
     .with_context(|| format!("order quantity ({}) does not fit into i32", order.quantity))?;
+  let time_in_force = format_time_in_force_short(order.time_in_force);
 
   let summary = match (&order.limit_price, &order.stop_price) {
     (Some(limit), Some(stop)) => {
@@ -1043,7 +1054,8 @@ fn order_print(
   };
 
   println!(
-    "{indent}{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
+    "[{tif}] {indent}{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
+    tif = time_in_force,
     indent = indent,
     id = order.id.to_hyphenated_ref(),
     side_width = side_max,
