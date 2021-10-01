@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.1.3
+-----
 - Added support for generating completion scripts for shells other than
   `bash`
 - Added time-in-force column to `order list` command
