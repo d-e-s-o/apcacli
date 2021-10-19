@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
-#![allow(
-  clippy::large_enum_variant,
-  clippy::let_and_return,
-)]
+#![allow(clippy::large_enum_variant, clippy::let_and_return)]
 
 mod args;
 
@@ -111,7 +108,8 @@ fn format_account_status(status: account::Status) -> String {
     account::Status::Active => "active",
     account::Status::Rejected => "rejected",
     account::Status::Unknown => "unknown",
-  }.to_string()
+  }
+  .to_string()
 }
 
 
@@ -131,7 +129,8 @@ async fn account_get(client: Client) -> Result<(), Error> {
     .await
     .with_context(|| "failed to retrieve account information")?;
 
-  println!(r#"account:
+  println!(
+    r#"account:
   id:                 {id}
   status:             {status}
   buying power:       {buying_power}
@@ -268,7 +267,8 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
   for activity in activities {
     match activity {
       account_activities::Activity::Trade(trade) => {
-        println!(r#"{time}  {side} {qty} {sym} @ {price} = {total}"#,
+        println!(
+          r#"{time}  {side} {qty} {sym} @ {price} = {total}"#,
           time = format_local_time_short(trade.transaction_time),
           side = format_activity_side(trade.side),
           qty = trade.quantity,
@@ -278,7 +278,8 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
         );
       },
       account_activities::Activity::NonTrade(non_trade) => {
-        println!(r#"{date:19}  {activity} {amount}"#,
+        println!(
+          r#"{date:19}  {activity} {amount}"#,
           date = format_date(non_trade.date),
           activity = format_activity_type(non_trade.type_),
           amount = format_price(&non_trade.net_amount, &currency),
@@ -314,7 +315,8 @@ async fn account_config_get(client: Client) -> Result<(), Error> {
     .await
     .with_context(|| "failed to retrieve account configuration")?;
 
-  println!(r#"account configuration:
+  println!(
+    r#"account configuration:
   trade confirmation:  {trade_confirmation}
   trading suspended:   {trading_suspended}
   shorting enabled:    {shorting}"#,
@@ -385,7 +387,8 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<(), Error> {
     .await
     .with_context(|| format!("failed to retrieve asset information for {}", symbol.0))?;
 
-  println!(r#"{sym}:
+  println!(
+    r#"{sym}:
   id:              {id}
   asset class:     {cls}
   exchange:        {exchg}
@@ -488,7 +491,8 @@ async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error>
       .map_err(Error::from)
       .try_for_each(|result| async {
         let update = result.unwrap();
-        println!(r#"account update:
+        println!(
+          r#"account update:
   status:        {status}
   created at:    {created}
   updated at:    {updated}
@@ -636,7 +640,8 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
       .map_err(Error::from)
       .try_for_each(|result| async {
         let update = result.unwrap();
-        println!(r#"{symbol} {status}:
+        println!(
+          r#"{symbol} {status}:
   order id:       {id}
   status:         {order_status}
   type:           {type_}
@@ -677,7 +682,8 @@ async fn market(client: Client) -> Result<(), Error> {
     .await
     .with_context(|| "failed to retrieve market clock")?;
 
-  println!(r#"market:
+  println!(
+    r#"market:
   open:         {open}
   current time: {current}
   next open:    {next_open}
@@ -874,7 +880,8 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
     limit_price,
     stop_price,
     ..Default::default()
-  }.init();
+  }
+  .init();
 
   let order = client
     .issue::<order::Patch>(&(id.0, request))
@@ -943,7 +950,8 @@ async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
     .collect::<Vec<_>>()
     .join(",");
 
-  println!(r#"{sym}:
+  println!(
+    r#"{sym}:
   order id:         {id}
   status:           {status}
   created at:       {created}
@@ -1133,7 +1141,8 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
   let position =
     position.with_context(|| format!("failed to retrieve position for {}", symbol.0))?;
 
-  println!(r#"{sym}:
+  println!(
+    r#"{sym}:
   asset id:               {id}
   exchange:               {exchg}
   avg entry:              {entry}
@@ -1176,7 +1185,8 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
     .currency;
   let order = order.with_context(|| format!("failed to liquidate position for {}", symbol.0))?;
 
-  println!(r#"{sym}:
+  println!(
+    r#"{sym}:
   order id:         {id}
   status:           {status}
   quantity:         {quantity}

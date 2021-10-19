@@ -1,10 +1,7 @@
 // Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#![allow(
-  clippy::large_enum_variant,
-  clippy::let_and_return,
-)]
+#![allow(clippy::large_enum_variant, clippy::let_and_return)]
 
 use std::io::stdout;
 

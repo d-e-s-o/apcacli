@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Formatted code base using `rustfmt` and checked in configuration
+
+
 0.1.3
 -----
 - Added support for generating completion scripts for shells other than
