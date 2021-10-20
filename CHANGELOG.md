@@ -1,6 +1,7 @@
 Unreleased
 ----------
 - Formatted code base using `rustfmt` and checked in configuration
+  - Added enforcement of code formatting style checks in CI
 
 
 0.1.3

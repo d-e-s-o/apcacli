@@ -28,3 +28,9 @@ lint:clippy:
   script:
   - rustup component add clippy
   - cargo clippy --all-targets --all-features -- -D warnings
+
+format:rustfmt:
+  stage: test
+  script:
+  - rustup toolchain install nightly -c rustfmt
+  - cargo +nightly fmt -- --check
