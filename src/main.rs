@@ -34,6 +34,7 @@ use apca::Client;
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Error;
+use anyhow::Result;
 
 use chrono::offset::Local;
 use chrono::offset::Utc;
@@ -114,7 +115,7 @@ fn format_account_status(status: account::Status) -> String {
 
 
 /// The handler for the 'account' command.
-async fn account(client: Client, account: Account) -> Result<(), Error> {
+async fn account(client: Client, account: Account) -> Result<()> {
   match account {
     Account::Get => account_get(client).await,
     Account::Activity(activity) => account_activity(client, activity).await,
@@ -123,7 +124,7 @@ async fn account(client: Client, account: Account) -> Result<(), Error> {
 }
 
 /// Print information about the account.
-async fn account_get(client: Client) -> Result<(), Error> {
+async fn account_get(client: Client) -> Result<()> {
   let account = client
     .issue::<account::Get>(&())
     .await
@@ -173,7 +174,7 @@ async fn account_get(client: Client) -> Result<(), Error> {
 
 
 /// The handler for the 'account activity' command.
-async fn account_activity(client: Client, activity: Activity) -> Result<(), Error> {
+async fn account_activity(client: Client, activity: Activity) -> Result<()> {
   match activity {
     Activity::Get => account_activity_get(client).await,
   }
@@ -252,7 +253,7 @@ fn sort_account_activity(activities: &mut Vec<account_activities::Activity>) {
 
 
 /// Retrieve account activity.
-async fn account_activity_get(client: Client) -> Result<(), Error> {
+async fn account_activity_get(client: Client) -> Result<()> {
   let request = account_activities::ActivityReq::default();
   let currency = client.issue::<account::Get>(&());
   let activity = client.issue::<account_activities::Get>(&request);
@@ -292,7 +293,7 @@ async fn account_activity_get(client: Client) -> Result<(), Error> {
 
 
 /// Retrieve or modify the account configuration.
-async fn account_config(client: Client, config: Config) -> Result<(), Error> {
+async fn account_config(client: Client, config: Config) -> Result<()> {
   match config {
     Config::Get => account_config_get(client).await,
     Config::Set(set) => account_config_set(client, set).await,
@@ -309,7 +310,7 @@ fn format_trade_confirmation(confirmation: account_config::TradeConfirmation) ->
 }
 
 /// Retrieve the account configuration.
-async fn account_config_get(client: Client) -> Result<(), Error> {
+async fn account_config_get(client: Client) -> Result<()> {
   let config = client
     .issue::<account_config::Get>(&())
     .await
@@ -328,7 +329,7 @@ async fn account_config_get(client: Client) -> Result<(), Error> {
 }
 
 /// Modify the account configuration.
-async fn account_config_set(client: Client, set: ConfigSet) -> Result<(), Error> {
+async fn account_config_set(client: Client, set: ConfigSet) -> Result<()> {
   let mut config = client
     .issue::<account_config::Get>(&())
     .await
@@ -373,7 +374,7 @@ async fn account_config_set(client: Client, set: ConfigSet) -> Result<(), Error>
 
 
 /// The handler for the 'asset' command.
-async fn asset(client: Client, asset: Asset) -> Result<(), Error> {
+async fn asset(client: Client, asset: Asset) -> Result<()> {
   match asset {
     Asset::Get { symbol } => asset_get(client, symbol).await,
     Asset::List => asset_list(client).await,
@@ -381,7 +382,7 @@ async fn asset(client: Client, asset: Asset) -> Result<(), Error> {
 }
 
 /// Print information about the asset with the given symbol.
-async fn asset_get(client: Client, symbol: Symbol) -> Result<(), Error> {
+async fn asset_get(client: Client, symbol: Symbol) -> Result<()> {
   let asset = client
     .issue::<asset::Get>(&symbol.0)
     .await
@@ -411,7 +412,7 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<(), Error> {
 }
 
 /// Print all tradable assets.
-async fn asset_list(client: Client) -> Result<(), Error> {
+async fn asset_list(client: Client) -> Result<()> {
   let request = assets::AssetsReq {
     status: asset::Status::Active,
     class: asset::Class::UsEquity,
@@ -468,7 +469,7 @@ impl event::EventStream for RawAccountUpdates {
 }
 
 
-async fn stream_account_updates(client: Client, json: bool) -> Result<(), Error> {
+async fn stream_account_updates(client: Client, json: bool) -> Result<()> {
   if json {
     event::stream::<RawAccountUpdates>(client.api_info())
       .await
@@ -619,7 +620,7 @@ impl event::EventStream for RawTradeUpdates {
 }
 
 
-async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
+async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
   if json {
     event::stream::<RawTradeUpdates>(client.api_info())
       .await
@@ -668,7 +669,7 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<(), Error> {
   Ok(())
 }
 
-async fn events(client: Client, events: Events) -> Result<(), Error> {
+async fn events(client: Client, events: Events) -> Result<()> {
   match events.event {
     EventType::Account => stream_account_updates(client, events.json).await,
     EventType::Trades => stream_trade_updates(client, events.json).await,
@@ -676,7 +677,7 @@ async fn events(client: Client, events: Events) -> Result<(), Error> {
 }
 
 /// Print the current market status.
-async fn market(client: Client) -> Result<(), Error> {
+async fn market(client: Client) -> Result<()> {
   let clock = client
     .issue::<clock::Get>(&())
     .await
@@ -704,7 +705,7 @@ async fn value_to_quantity(
   symbol: &str,
   value: &Num,
   price: Option<Num>,
-) -> Result<u64, Error> {
+) -> Result<u64> {
   let price = match price {
     Some(price) => Ok(price),
     None => {
@@ -755,7 +756,7 @@ async fn value_to_quantity(
 
 
 /// The handler for the 'order' command.
-async fn order(client: Client, order: Order) -> Result<(), Error> {
+async fn order(client: Client, order: Order) -> Result<()> {
   match order {
     Order::Submit(submit) => order_submit(client, submit).await,
     Order::Change(change) => order_change(client, change).await,
@@ -779,7 +780,7 @@ fn determine_order_type(limit_price: &Option<Num>, stop_price: &Option<Num>) -> 
 
 
 /// Submit an order.
-async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> {
+async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
   let SubmitOrder {
     side,
     symbol,
@@ -844,7 +845,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<(), Error> 
 
 
 /// Change an order.
-async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> {
+async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
   let ChangeOrder {
     id,
     quantity,
@@ -894,7 +895,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<(), Error> 
 
 
 /// Cancel an open order.
-async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> {
+async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
   match cancel {
     CancelOrder::ById(id) => client
       .issue::<order::Delete>(&id.0)
@@ -933,7 +934,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<(), Error> 
 
 
 /// Retrieve information about an order.
-async fn order_get(client: Client, id: OrderId) -> Result<(), Error> {
+async fn order_get(client: Client, id: OrderId) -> Result<()> {
   let currency = client.issue::<account::Get>(&());
   let order = client.issue::<order::Get>(&id.0);
 
@@ -1024,7 +1025,7 @@ fn order_print(
   side_max: usize,
   qty_max: usize,
   sym_max: usize,
-) -> Result<(), Error> {
+) -> Result<()> {
   let quantity = i32::try_from(order.quantity)
     .with_context(|| format!("order quantity ({}) does not fit into i32", order.quantity))?;
   let time_in_force = format_time_in_force_short(order.time_in_force);
@@ -1078,7 +1079,7 @@ fn order_print(
 }
 
 /// List all currently open orders.
-async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
+async fn order_list(client: Client, closed: bool) -> Result<()> {
   let request = orders::OrdersReq {
     status: if closed {
       orders::Status::Closed
@@ -1114,7 +1115,7 @@ async fn order_list(client: Client, closed: bool) -> Result<(), Error> {
 
 
 /// The handler for the 'position' command.
-async fn position(client: Client, position: Position) -> Result<(), Error> {
+async fn position(client: Client, position: Position) -> Result<()> {
   match position {
     Position::Close { symbol } => position_close(client, symbol).await,
     Position::Get { symbol } => position_get(client, symbol).await,
@@ -1130,7 +1131,7 @@ fn format_position_side(side: position::Side) -> &'static str {
 }
 
 /// Retrieve and print a position for a given symbol.
-async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
+async fn position_get(client: Client, symbol: Symbol) -> Result<()> {
   let currency = client.issue::<account::Get>(&());
   let position = client.issue::<position::Get>(&symbol.0);
 
@@ -1175,7 +1176,7 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<(), Error> {
 
 
 /// Liquidate a position for a certain asset.
-async fn position_close(client: Client, symbol: Symbol) -> Result<(), Error> {
+async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
   let currency = client.issue::<account::Get>(&());
   let order = client.issue::<position::Delete>(&symbol.0);
 
@@ -1442,7 +1443,7 @@ fn position_print(positions: &[position::Position], currency: &str) {
 }
 
 /// List all currently open positions.
-async fn position_list(client: Client) -> Result<(), Error> {
+async fn position_list(client: Client) -> Result<()> {
   let account = client.issue::<account::Get>(&());
   let positions = client.issue::<positions::Get>(&());
 
@@ -1457,7 +1458,7 @@ async fn position_list(client: Client) -> Result<(), Error> {
   Ok(())
 }
 
-async fn run() -> Result<(), Error> {
+async fn run() -> Result<()> {
   let args = Args::from_args();
   let level = match args.verbosity {
     0 => LevelFilter::WARN,
