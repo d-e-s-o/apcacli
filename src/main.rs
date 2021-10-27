@@ -8,8 +8,7 @@ mod args;
 
 use std::borrow::Cow;
 use std::cmp::max;
-use std::convert::TryFrom;
-use std::convert::TryInto;
+use std::future::Future;
 use std::io::stdout;
 use std::io::Write;
 use std::ops::Deref as _;
@@ -26,12 +25,13 @@ use apca::api::v2::order;
 use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
-use apca::data::v1::bars;
+use apca::data::v2::last_quote;
 use apca::event;
 use apca::ApiInfo;
 use apca::Client;
 
-use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::ensure;
 use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
@@ -40,9 +40,11 @@ use chrono::offset::Local;
 use chrono::offset::Utc;
 use chrono::DateTime;
 
+use futures::future::join;
 use futures::future::ready;
 use futures::future::TryFutureExt;
 use futures::join;
+use futures::stream::FuturesOrdered;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
@@ -275,7 +277,7 @@ async fn account_activity_get(client: Client) -> Result<()> {
           qty = trade.quantity,
           sym = trade.symbol,
           price = format_price(&trade.price, &currency),
-          total = format_price(&(trade.price * trade.quantity as i32), &currency),
+          total = format_price(&(trade.price * &trade.quantity), &currency),
         );
       },
       account_activities::Activity::NonTrade(non_trade) => {
@@ -634,6 +636,12 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
       })
       .await?;
   } else {
+    let currency = client
+      .issue::<account::Get>(&())
+      .await
+      .context("failed to retrieve account information")?
+      .currency;
+
     client
       .subscribe::<events::TradeUpdates>()
       .await
@@ -648,7 +656,7 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
   type:           {type_}
   side:           {side}
   time-in-force:  {time_in_force}
-  quantity:       {quantity}
+  {amount_type:15} {amount}
   filled:         {filled}
 "#,
           symbol = update.order.symbol,
@@ -658,7 +666,8 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
           type_ = format_order_type(update.order.type_),
           side = format_order_side(update.order.side),
           time_in_force = format_time_in_force(update.order.time_in_force),
-          quantity = update.order.quantity,
+          amount_type = format_amount_type(&update.order.amount).to_string() + ":",
+          amount = format_amount(&update.order.amount, &currency),
           filled = update.order.filled_quantity,
         );
         Ok(())
@@ -703,55 +712,33 @@ async fn market(client: Client) -> Result<()> {
 async fn value_to_quantity(
   client: &Client,
   symbol: &str,
+  side: order::Side,
   value: &Num,
   price: Option<Num>,
-) -> Result<u64> {
+) -> Result<Num> {
   let price = match price {
-    Some(price) => Ok(price),
+    Some(price) => price,
     None => {
-      let request = bars::BarReq {
-        symbol: symbol.to_string(),
-        limit: 1,
-        end: None,
+      let quote = client
+        .issue::<last_quote::Get>(&symbol.to_string())
+        .await
+        .with_context(|| format!("failed to retrieve last quote for {}", symbol))?;
+
+      let price = match side {
+        order::Side::Buy => quote.ask_price,
+        order::Side::Sell => quote.bid_price,
       };
 
-      let mut response = client
-        .issue::<bars::Get>(&(bars::TimeFrame::OneMinute, request))
-        .await
-        .with_context(|| format!("failed to retrieve current market value of {}", symbol))?;
-
-      if let Some(bars) = response.get_mut(symbol) {
-        if bars.len() == 1 {
-          // We use the last close price as our reference to infer the
-          // number of stocks to purchase from.
-          let bars::Bar { close, .. } = bars.remove(0);
-          Ok(close)
-        } else {
-          Err(anyhow!(
-            "market data response for {} contained unexpected number of bars: {}",
-            symbol,
-            bars.len()
-          ))
-        }
-      } else {
-        Err(anyhow!(
-          "market data for {} not present in response",
-          symbol
-        ))
-      }
+      ensure!(
+        !price.is_zero(),
+        "most recent quote for {} contains price of zero; unable to estimate quantity",
+        symbol
+      );
+      price
     },
-  }?;
+  };
 
-  // We `round` as opposed to `trunc` to have a little less bias in
-  // there and in an attempt to treat short orders equally.
-  let amount = (value / price).round();
-  let amount = amount
-    .to_i64()
-    .ok_or_else(|| anyhow!("calculated amount {} is not a valid 64 bit integer", amount))?;
-  let amount = amount
-    .try_into()
-    .with_context(|| format!("amount {} is not unsigned", amount))?;
-  Ok(amount)
+  Ok(value / price)
 }
 
 
@@ -806,9 +793,19 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
 
   let quantity = match (quantity, value) {
     (Some(quantity), None) => quantity,
-    (None, Some(value)) => value_to_quantity(&client, &symbol, &value, limit_price.clone())
-      .await
-      .with_context(|| "unable to convert value to quantity")?,
+    (None, Some(value)) => {
+      let quantity = value_to_quantity(&client, &symbol, side, &value, limit_price.clone())
+        .await
+        .with_context(|| "unable to convert value to quantity")?
+        // We `round` as opposed to `trunc` to have a little less bias
+        // in there and in an attempt to treat short orders equally.
+        // Strictly speaking, with fractional trading enabled, we could
+        // just leave the fractional value as-is, but it's not
+        // guaranteed that the account has that enabled or whether it's
+        // really desired by the user.
+        .round();
+      quantity
+    },
     // Other combinations should never happen as ensured by `clap`.
     _ => unreachable!(),
   };
@@ -829,7 +826,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
     extended_hours,
     ..Default::default()
   }
-  .init(symbol, side, quantity);
+  .init(symbol, side, order::Amount::quantity(quantity));
 
   let order = client
     .issue::<order::Post>(&request)
@@ -867,11 +864,26 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
   let stop_price = stop_price.or_else(|| order.stop_price.take());
 
   let quantity = match (quantity, value) {
-    (None, None) => order.quantity,
+    (None, None) => {
+      match order.amount {
+        order::Amount::Quantity { quantity } => quantity,
+        order::Amount::Notional { .. } => {
+          // Alpaca's order PATCH logic currently does not seem to
+          // support notional orders.
+          bail!("unable to change notional order: not supported by Alpaca API")
+        },
+      }
+    },
     (Some(quantity), None) => quantity,
-    (None, Some(value)) => value_to_quantity(&client, &order.symbol, &value, limit_price.clone())
-      .await
-      .with_context(|| "unable to convert value to quantity")?,
+    (None, Some(value)) => value_to_quantity(
+      &client,
+      &order.symbol,
+      order.side,
+      &value,
+      limit_price.clone(),
+    )
+    .await
+    .with_context(|| "unable to convert value to quantity")?,
     _ => unreachable!(),
   };
 
@@ -961,7 +973,7 @@ async fn order_get(client: Client, id: OrderId) -> Result<()> {
   filled at:        {filled}
   expired at:       {expired}
   canceled at:      {canceled}
-  quantity:         {quantity}
+  {amount_type:<17} {amount}
   filled quantity:  {filled_qty}
   type:             {type_}
   side:             {side}
@@ -994,7 +1006,8 @@ async fn order_get(client: Client, id: OrderId) -> Result<()> {
       .canceled_at
       .map(format_local_time)
       .unwrap_or_else(|| "N/A".into()),
-    quantity = order.quantity,
+    amount_type = format_amount_type(&order.amount).to_string() + ":",
+    amount = format_amount(&order.amount, &currency),
     filled_qty = order.filled_quantity,
     type_ = format_order_type(order.type_),
     side = format_order_side(order.side),
@@ -1020,14 +1033,13 @@ where
 /// Print details of an order.
 fn order_print(
   order: &order::Order,
+  quantity: &Num,
   indent: &str,
   currency: &str,
   side_max: usize,
   qty_max: usize,
   sym_max: usize,
 ) -> Result<()> {
-  let quantity = i32::try_from(order.quantity)
-    .with_context(|| format!("order quantity ({}) does not fit into i32", order.quantity))?;
   let time_in_force = format_time_in_force_short(order.time_in_force);
 
   let summary = match (&order.limit_price, &order.stop_price) {
@@ -1070,12 +1082,56 @@ fn order_print(
     side_width = side_max,
     side = format_order_side(order.side),
     qty_width = qty_max,
-    qty = format!("{:.0}", order.quantity),
+    qty = format_approximate_quantity(quantity),
     sym_width = sym_max,
     sym = order.symbol,
     summary = summary,
   );
   Ok(())
+}
+
+/// Round and format a quantity somewhat sensibly.
+fn format_approximate_quantity(quantity: &Num) -> String {
+  let mut denom = 1u64;
+  let mut precision = 0usize;
+  let rounded = loop {
+    if quantity >= &Num::new(10, denom) {
+      break quantity.round_with(precision.saturating_sub(1))
+    } else {
+      denom = denom.checked_mul(10).unwrap();
+      precision = precision.checked_add(1).unwrap();
+    }
+  };
+
+  (if &rounded != quantity { "~" } else { "" }).to_string() + &rounded.to_string()
+}
+
+/// Retrieve or infer the quantity of an order.
+fn order_quantity<'client>(
+  client: &'client Client,
+  order: &order::Order,
+) -> impl Future<Output = Result<Num, Error>> + 'client {
+  let id = order.id;
+  let symbol = order.symbol.clone();
+  let amount = order.amount.clone();
+  let side = order.side;
+  let limit_price = order.limit_price.clone();
+
+  async move {
+    match amount {
+      order::Amount::Quantity { quantity } => Ok(quantity),
+      order::Amount::Notional { notional } => {
+        value_to_quantity(client, &symbol, side, &notional, limit_price)
+          .await
+          .with_context(|| {
+            format!(
+              "failed to estimate quantity for order {}",
+              id.to_hyphenated_ref()
+            )
+          })
+      },
+    }
+  }
 }
 
 /// List all currently open orders.
@@ -1099,15 +1155,43 @@ async fn order_list(client: Client, closed: bool) -> Result<()> {
     .currency;
 
   let orders = orders.with_context(|| "failed to list orders")?;
+  let count = orders.len();
+  // Associate a quantity with each order. That's mostly necessary to
+  // properly handle the `Amount` type properly that orders use. For
+  // most orders that is a trivial operation in which we only access and
+  // clone a member. But for notional orders we may end up inquiring the
+  // most recent quote in order to estimate the purchasable quantity.
+  // Because we reference this quantity multiple times moving forward,
+  // we basically cache it here, by pairing it up with the actual order
+  // object.
+  let orders = orders
+    .into_iter()
+    .map(|order| {
+      let future = order_quantity(&client, &order);
+      join(ready(order), future)
+    })
+    .collect::<FuturesOrdered<_>>()
+    .fold(
+      Ok(Vec::with_capacity(count)),
+      |acc, (order, result)| async {
+        acc.and_then(|mut vec| {
+          result.map(|data| {
+            vec.push((order, data));
+            vec
+          })
+        })
+      },
+    )
+    .await?;
 
-  let side_max = max_width(&orders, |p| format_order_side(p.side).len());
-  let qty_max = max_width(&orders, |p| p.quantity.to_string().len());
-  let sym_max = max_width(&orders, |p| p.symbol.len());
+  let side_max = max_width(&orders, |o| format_order_side(o.0.side).len());
+  let qty_max = max_width(&orders, |o| format_approximate_quantity(&o.1).len());
+  let sym_max = max_width(&orders, |o| o.0.symbol.len());
 
-  for order in orders {
-    order_print(&order, "", &currency, side_max, qty_max, sym_max)?;
+  for (order, quantity) in orders {
+    order_print(&order, &quantity, "", &currency, side_max, qty_max, sym_max)?;
     for leg in order.legs {
-      order_print(&leg, "  ", &currency, side_max, qty_max, sym_max)?;
+      order_print(&leg, &quantity, "  ", &currency, side_max, qty_max, sym_max)?;
     }
   }
   Ok(())
@@ -1190,7 +1274,7 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
     r#"{sym}:
   order id:         {id}
   status:           {status}
-  quantity:         {quantity}
+  {amount_type:<17} {amount}
   filled quantity:  {filled}
   type:             {type_}
   side:             {side}
@@ -1199,7 +1283,8 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
     sym = order.symbol,
     id = order.id.to_hyphenated_ref(),
     status = format_order_status(order.status),
-    quantity = order.quantity,
+    amount_type = format_amount_type(&order.amount).to_string() + ":",
+    amount = format_amount(&order.amount, &currency),
     filled = order.filled_quantity,
     type_ = format_order_type(order.type_),
     side = format_order_side(order.side),
@@ -1221,6 +1306,22 @@ fn format_option_price(price: &Option<Num>, currency: &str) -> Str {
     .as_ref()
     .map(|price| format_price(price, currency))
     .unwrap_or_else(|| "N/A".into())
+}
+
+/// Format the amount type of an order.
+fn format_amount_type(amount: &order::Amount) -> &str {
+  match amount {
+    order::Amount::Quantity { .. } => "quantity",
+    order::Amount::Notional { .. } => "notional",
+  }
+}
+
+/// Format an amount.
+fn format_amount(amount: &order::Amount, currency: &str) -> Str {
+  match amount {
+    order::Amount::Quantity { quantity } => quantity.to_string().into(),
+    order::Amount::Notional { notional } => format_price(notional, currency),
+  }
 }
 
 fn format_colored<F>(value: &Num, format: F) -> Paint<Str>
@@ -1279,19 +1380,18 @@ fn format_option_percent_gain(percent: &Option<Num>) -> Paint<Str> {
 
 
 /// Format a quantity for a position.
-fn format_position_quantity(quantity: u64, side: position::Side) -> String {
+fn format_position_quantity(quantity: &Num, side: position::Side) -> String {
   match side {
-    position::Side::Long => quantity.into(),
-    position::Side::Short => -((quantity as u128) as i128),
+    position::Side::Long => quantity.to_string(),
+    position::Side::Short => (-quantity).to_string(),
   }
-  .to_string()
 }
 
 
 /// Print a table with the given positions.
 fn position_print(positions: &[position::Position], currency: &str) {
   let qty_max = max_width(positions, |p| {
-    format_position_quantity(p.quantity, p.side).len()
+    format_position_quantity(&p.quantity, p.side).len()
   });
   let sym_max = max_width(positions, |p| p.symbol.len());
   let price_max = max_width(positions, |p| {
@@ -1393,7 +1493,7 @@ fn position_print(positions: &[position::Position], currency: &str) {
        {today:>today_width$} ({today_pct:>today_pct_width$}) | \
        {total:>total_width$} ({total_pct:>total_pct_width$})",
       qty_width = qty_max,
-      qty = format_position_quantity(position.quantity, position.side),
+      qty = format_position_quantity(&position.quantity, position.side),
       sym_width = sym_max,
       sym = position.symbol,
       price_width = price_max,
@@ -1507,4 +1607,25 @@ fn main() {
   // buffered content.
   let _ = stdout().flush();
   exit(exit_code)
+}
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+
+  /// Check that the `format_approximate_quantity` function works as expected.
+  #[test]
+  fn quantity_formatting() {
+    assert_eq!(format_approximate_quantity(&Num::from(32)), "32");
+    assert_eq!(format_approximate_quantity(&Num::new(11, 10)), "~1");
+    assert_eq!(format_approximate_quantity(&Num::new(88, 100)), "~0.9");
+    assert_eq!(format_approximate_quantity(&Num::new(43, 1000)), "~0.04");
+    assert_eq!(
+      format_approximate_quantity(&Num::new(4345, 100000)),
+      "~0.04"
+    );
+    assert_eq!(format_approximate_quantity(&Num::new(4, 100)), "0.04");
+  }
 }

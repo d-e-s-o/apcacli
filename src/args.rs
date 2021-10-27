@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::fmt::Debug;
@@ -211,7 +211,7 @@ pub struct SubmitOrder {
   pub symbol: String,
   /// The quantity to trade.
   #[structopt(long, group = "amount")]
-  pub quantity: Option<u64>,
+  pub quantity: Option<Num>,
   /// The value to trade.
   #[structopt(long, group = "amount")]
   pub value: Option<Num>,
@@ -242,7 +242,7 @@ pub struct ChangeOrder {
   pub id: OrderId,
   /// The quantity to trade.
   #[structopt(long, group = "amount")]
-  pub quantity: Option<u64>,
+  pub quantity: Option<Num>,
   /// The value to trade.
   #[structopt(long, group = "amount")]
   pub value: Option<Num>,
