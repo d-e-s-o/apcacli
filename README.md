@@ -19,7 +19,7 @@ Alpaca's functionality, including but not limited to:
 - listing and retrieving general asset information
 - streaming of account and trade events
 
-It support both the paper trading as well as the live API endpoints.
+It supports both the paper trading as well as the live API endpoints.
 
 
 Usage
