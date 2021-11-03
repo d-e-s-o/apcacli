@@ -747,7 +747,7 @@ async fn value_to_quantity(
   let amount = (value / price).round();
   let amount = amount
     .to_i64()
-    .ok_or_else(|| anyhow!("calculated amount {} is not a valid 64 bit integer"))?;
+    .ok_or_else(|| anyhow!("calculated amount {} is not a valid 64 bit integer", amount))?;
   let amount = amount
     .try_into()
     .with_context(|| format!("amount {} is not unsigned", amount))?;
