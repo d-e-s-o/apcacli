@@ -160,8 +160,6 @@ pub enum Asset {
 /// The type of event to stream.
 #[derive(Debug, StructOpt)]
 pub enum EventType {
-  /// Subscribe to account events.
-  Account,
   /// Subscribe to trade events.
   Trades,
 }

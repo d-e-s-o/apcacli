@@ -458,76 +458,6 @@ fn format_date(time: DateTime<Utc>) -> Str {
   time.date().format("%Y-%m-%d").to_string().into()
 }
 
-
-/// A helper for receiving raw JSON account updates.
-enum RawAccountUpdates {}
-
-impl event::EventStream for RawAccountUpdates {
-  type Event = Box<RawValue>;
-
-  fn stream() -> event::StreamType {
-    event::StreamType::AccountUpdates
-  }
-}
-
-
-async fn stream_account_updates(client: Client, json: bool) -> Result<()> {
-  if json {
-    event::stream::<RawAccountUpdates>(client.api_info())
-      .await
-      .with_context(|| "failed to subscribe to account updates")?
-      .map_err(Error::from)
-      .try_for_each(|result| {
-        async {
-          let update = result.unwrap();
-          // TODO: We should honor the write result.
-          let _result = stdout().write(update.get().as_bytes());
-          Ok(())
-        }
-      })
-      .await?;
-  } else {
-    client
-      .subscribe::<events::AccountUpdates>()
-      .await
-      .with_context(|| "failed to subscribe to account updates")?
-      .map_err(Error::from)
-      .try_for_each(|result| async {
-        let update = result.unwrap();
-        println!(
-          r#"account update:
-  status:        {status}
-  created at:    {created}
-  updated at:    {updated}
-  deleted at:    {deleted}
-  cash:          {cash}
-  withdrawable:  {withdrawable}
-"#,
-          status = update.status,
-          created = update
-            .created_at
-            .map(format_local_time)
-            .unwrap_or_else(|| "N/A".into()),
-          updated = update
-            .updated_at
-            .map(format_local_time)
-            .unwrap_or_else(|| "N/A".into()),
-          deleted = update
-            .deleted_at
-            .map(format_local_time)
-            .unwrap_or_else(|| "N/A".into()),
-          cash = format_price(&update.cash, &update.currency),
-          withdrawable = format_price(&update.withdrawable_cash, &update.currency),
-        );
-        Ok(())
-      })
-      .await?;
-  }
-
-  Ok(())
-}
-
-
 fn format_trade_status(status: events::TradeStatus) -> &'static str {
   match status {
     events::TradeStatus::New => "new",
@@ -680,7 +610,6 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
 
 async fn events(client: Client, events: Events) -> Result<()> {
   match events.event {
-    EventType::Account => stream_account_updates(client, events.json).await,
     EventType::Trades => stream_trade_updates(client, events.json).await,
   }
 }
