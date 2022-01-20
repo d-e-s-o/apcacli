@@ -169,9 +169,6 @@ pub enum EventType {
 pub struct Events {
   #[structopt(flatten)]
   pub event: EventType,
-  /// Print events in JSON format.
-  #[structopt(short = "j", long)]
-  pub json: bool,
 }
 
 

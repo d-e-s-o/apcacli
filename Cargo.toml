@@ -37,7 +37,7 @@ anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
 num-decimal = {version = "0.2.4", default-features = false, features = ["num-v04"]}
-serde_json = {version = "1.0", default-features = false, features = ["raw_value"]}
+serde_json = {version = "1.0", default-features = false}
 structopt = {version = "0.3", default-features = false}
 tokio = {version = "1.0", default-features = false, features = ["rt"]}
 tracing = {version = "0.1", default-features = false, features = ["std"]}

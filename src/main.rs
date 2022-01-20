@@ -26,7 +26,6 @@ use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::data::v2::last_quote;
-use apca::event;
 use apca::ApiInfo;
 use apca::Client;
 
@@ -50,8 +49,6 @@ use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
-
-use serde_json::value::RawValue;
 
 use structopt::StructOpt;
 
@@ -540,47 +537,22 @@ fn format_time_in_force_short(time_in_force: order::TimeInForce) -> &'static str
 }
 
 
-/// A helper for receiving raw JSON trade updates.
-enum RawTradeUpdates {}
+async fn stream_trade_updates(client: Client) -> Result<()> {
+  let currency = client
+    .issue::<account::Get>(&())
+    .await
+    .context("failed to retrieve account information")?
+    .currency;
 
-impl event::EventStream for RawTradeUpdates {
-  type Event = Box<RawValue>;
-
-  fn stream() -> event::StreamType {
-    event::StreamType::TradeUpdates
-  }
-}
-
-
-async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
-  if json {
-    event::stream::<RawTradeUpdates>(client.api_info())
-      .await
-      .with_context(|| "failed to subscribe to trade updates")?
-      .map_err(Error::from)
-      .try_for_each(|result| async {
-        let update = result.unwrap();
-        // TODO: We should honor the write result.
-        let _result = stdout().write(update.get().as_bytes());
-        Ok(())
-      })
-      .await?;
-  } else {
-    let currency = client
-      .issue::<account::Get>(&())
-      .await
-      .context("failed to retrieve account information")?
-      .currency;
-
-    client
-      .subscribe::<events::TradeUpdates>()
-      .await
-      .with_context(|| "failed to subscribe to trade updates")?
-      .map_err(Error::from)
-      .try_for_each(|result| async {
-        let update = result.unwrap();
-        println!(
-          r#"{symbol} {status}:
+  client
+    .subscribe::<events::TradeUpdates>()
+    .await
+    .with_context(|| "failed to subscribe to trade updates")?
+    .map_err(Error::from)
+    .try_for_each(|result| async {
+      let update = result.unwrap();
+      println!(
+        r#"{symbol} {status}:
   order id:       {id}
   status:         {order_status}
   type:           {type_}
@@ -589,28 +561,27 @@ async fn stream_trade_updates(client: Client, json: bool) -> Result<()> {
   {amount_type:15} {amount}
   filled:         {filled}
 "#,
-          symbol = update.order.symbol,
-          status = format_trade_status(update.event),
-          id = update.order.id.to_hyphenated_ref(),
-          order_status = format_order_status(update.order.status),
-          type_ = format_order_type(update.order.type_),
-          side = format_order_side(update.order.side),
-          time_in_force = format_time_in_force(update.order.time_in_force),
-          amount_type = format_amount_type(&update.order.amount).to_string() + ":",
-          amount = format_amount(&update.order.amount, &currency),
-          filled = update.order.filled_quantity,
-        );
-        Ok(())
-      })
-      .await?;
-  }
+        symbol = update.order.symbol,
+        status = format_trade_status(update.event),
+        id = update.order.id.to_hyphenated_ref(),
+        order_status = format_order_status(update.order.status),
+        type_ = format_order_type(update.order.type_),
+        side = format_order_side(update.order.side),
+        time_in_force = format_time_in_force(update.order.time_in_force),
+        amount_type = format_amount_type(&update.order.amount).to_string() + ":",
+        amount = format_amount(&update.order.amount, &currency),
+        filled = update.order.filled_quantity,
+      );
+      Ok(())
+    })
+    .await?;
 
   Ok(())
 }
 
 async fn events(client: Client, events: Events) -> Result<()> {
   match events.event {
-    EventType::Trades => stream_trade_updates(client, events.json).await,
+    EventType::Trades => stream_trade_updates(client).await,
   }
 }
 
