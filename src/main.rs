@@ -20,11 +20,11 @@ use apca::api::v2::account_config;
 use apca::api::v2::asset;
 use apca::api::v2::assets;
 use apca::api::v2::clock;
-use apca::api::v2::events;
 use apca::api::v2::order;
 use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
+use apca::api::v2::updates;
 use apca::data::v2::last_quote;
 use apca::ApiInfo;
 use apca::Client;
@@ -455,25 +455,25 @@ fn format_date(time: DateTime<Utc>) -> Str {
   time.date().format("%Y-%m-%d").to_string().into()
 }
 
-fn format_trade_status(status: events::TradeStatus) -> &'static str {
+fn format_trade_status(status: updates::TradeStatus) -> &'static str {
   match status {
-    events::TradeStatus::New => "new",
-    events::TradeStatus::Replaced => "replaced",
-    events::TradeStatus::ReplaceRejected => "replace rejected",
-    events::TradeStatus::PartialFill => "partially filled",
-    events::TradeStatus::Filled => "filled",
-    events::TradeStatus::DoneForDay => "done for day",
-    events::TradeStatus::Canceled => "canceled",
-    events::TradeStatus::CancelRejected => "cancel rejected",
-    events::TradeStatus::Expired => "expired",
-    events::TradeStatus::PendingCancel => "pending cancel",
-    events::TradeStatus::Stopped => "stopped",
-    events::TradeStatus::Rejected => "rejected",
-    events::TradeStatus::Suspended => "suspended",
-    events::TradeStatus::PendingNew => "pending new",
-    events::TradeStatus::PendingReplace => "pending replace",
-    events::TradeStatus::Calculated => "calculated",
-    events::TradeStatus::Unknown => "unknown",
+    updates::TradeStatus::New => "new",
+    updates::TradeStatus::Replaced => "replaced",
+    updates::TradeStatus::ReplaceRejected => "replace rejected",
+    updates::TradeStatus::PartialFill => "partially filled",
+    updates::TradeStatus::Filled => "filled",
+    updates::TradeStatus::DoneForDay => "done for day",
+    updates::TradeStatus::Canceled => "canceled",
+    updates::TradeStatus::CancelRejected => "cancel rejected",
+    updates::TradeStatus::Expired => "expired",
+    updates::TradeStatus::PendingCancel => "pending cancel",
+    updates::TradeStatus::Stopped => "stopped",
+    updates::TradeStatus::Rejected => "rejected",
+    updates::TradeStatus::Suspended => "suspended",
+    updates::TradeStatus::PendingNew => "pending new",
+    updates::TradeStatus::PendingReplace => "pending replace",
+    updates::TradeStatus::Calculated => "calculated",
+    updates::TradeStatus::Unknown => "unknown",
   }
 }
 
@@ -544,11 +544,12 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
     .context("failed to retrieve account information")?
     .currency;
 
-  client
-    .subscribe::<events::TradeUpdates>()
+  let (stream, _subscription) = client
+    .subscribe::<updates::TradeUpdates>()
     .await
-    .with_context(|| "failed to subscribe to trade updates")?
-    .map_err(Error::from)
+    .with_context(|| "failed to subscribe to trade updates")?;
+
+  stream
     .try_for_each(|result| async {
       let update = result.unwrap();
       println!(

@@ -5,7 +5,7 @@ Unreleased
 - Formatted code base using `rustfmt` and checked in configuration
   - Added enforcement of code formatting style checks in CI
 - Bumped minimum supported Rust version to `1.56`
-- Bumped `apca` dependency to `0.21.1`
+- Bumped `apca` dependency to `0.22.0`
 
 
 0.1.3
