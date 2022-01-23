@@ -6,6 +6,7 @@ Unreleased
   - Added enforcement of code formatting style checks in CI
 - Bumped minimum supported Rust version to `1.56`
 - Bumped `apca` dependency to `0.22.0`
+- Bumped `tracing-subscriber` dependency to `0.3`
 
 
 0.1.3
