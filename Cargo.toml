@@ -31,6 +31,9 @@ panic = "abort"
 name = "shell-complete"
 path = "utils/shell-complete.rs"
 
+[build-dependencies]
+anyhow = {version = "1.0", default-features = false, features = ["std"]}
+
 [dependencies]
 apca = "0.22.0"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}

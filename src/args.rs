@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
+#[structopt(version = env!("VERSION"))]
 pub struct Args {
   #[structopt(subcommand)]
   pub command: Command,
