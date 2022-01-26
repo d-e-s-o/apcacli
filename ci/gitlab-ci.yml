@@ -7,38 +7,23 @@
 # https://github.com/rust-lang/docker-rust/blob/4627bd25407065f8f8feafa11a33c46c51f759d8/1.56.1/buster/Dockerfile
 image: "rust:1.56.1"
 
-stages:
-  - build
-  - test
-
-build:cargo:
-  stage: build
-  artifacts:
-    paths:
-      - target/
+build-test-debug:cargo:
   script:
   - rustc --version && cargo --version
-  - cargo build --bins --verbose
-  - cargo build --bins --verbose --release
-  - cargo test --no-run
+  - cargo build --bins
+  - cargo test
 
-test:cargo:
-  stage: test
-  dependencies:
-  - build:cargo
+build-release:cargo:
   script:
-  - cargo test --verbose
+  - rustc --version && cargo --version
+  - cargo build --bins --release
 
 lint:clippy:
-  stage: test
-  dependencies:
-    - build:cargo
   script:
   - rustup component add clippy
-  - cargo clippy --all-targets --all-features -- -D warnings
+  - cargo clippy --no-deps --all-targets --all-features -- -A unknown_lints -D warnings
 
 format:rustfmt:
-  stage: test
   script:
   - rustup toolchain install nightly -c rustfmt
   - cargo +nightly fmt -- --check
