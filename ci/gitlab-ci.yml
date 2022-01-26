@@ -7,18 +7,68 @@
 # https://github.com/rust-lang/docker-rust/blob/4627bd25407065f8f8feafa11a33c46c51f759d8/1.56.1/buster/Dockerfile
 image: "rust:1.56.1"
 
+variables:
+  FF_USE_FASTZIP: "true"
+  ARTIFACT_COMPRESSION_LEVEL: "fast"
+  CACHE_COMPRESSION_LEVEL: "fast"
+
+.cargo-home: &cargo-home
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
+.crates-io-cache: &crates-io-cache
+  key: crates-io-cache
+  paths:
+    # See https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+    - $CARGO_HOME/bin/
+    - $CARGO_HOME/git/db/
+    - $CARGO_HOME/registry/index/
+    - $CARGO_HOME/registry/cache/
+  policy: pull-push
+
+.target-debug-cache: &target-debug-cache
+  key: target-debug-cache-$CI_JOB_IMAGE
+  paths:
+    - target/debug/
+    - Cargo.lock
+  policy: pull-push
+
+.target-release-cache: &target-release-cache
+  key: target-release-cache-$CI_JOB_IMAGE
+  paths:
+    - target/release/
+    - Cargo.lock
+  policy: pull-push
+
 build-test-debug:cargo:
+  variables:
+    <<: *cargo-home
+  cache:
+  - <<: *crates-io-cache
+  - <<: *target-debug-cache
   script:
   - rustc --version && cargo --version
   - cargo build --bins
   - cargo test
 
 build-release:cargo:
+  variables:
+    <<: *cargo-home
+  cache:
+  - <<: *crates-io-cache
+    policy: pull
+  - <<: *target-release-cache
   script:
   - rustc --version && cargo --version
   - cargo build --bins --release
 
 lint:clippy:
+  variables:
+    <<: *cargo-home
+  cache:
+  - <<: *crates-io-cache
+    policy: pull
+  - <<: *target-debug-cache
+    policy: pull
   script:
   - rustup component add clippy
   - cargo clippy --no-deps --all-targets --all-features -- -A unknown_lints -D warnings
