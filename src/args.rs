@@ -34,14 +34,14 @@ pub enum Command {
   Account(Account),
   /// Retrieve information pertaining assets.
   Asset(Asset),
-  /// Subscribe to some event stream.
-  Events(Events),
   /// Retrieve status information about the market.
   Market,
   /// Perform various order related functions.
   Order(Order),
   /// Perform various position related functions.
   Position(Position),
+  /// Subscribe to some update stream.
+  Updates(Updates),
 }
 
 
@@ -158,18 +158,18 @@ pub enum Asset {
 }
 
 
-/// The type of event to stream.
+/// The type of update to stream.
 #[derive(Debug, StructOpt)]
-pub enum EventType {
+pub enum UpdateType {
   /// Subscribe to trade events.
   Trades,
 }
 
-/// A struct representing the `events` command.
+/// A struct representing the `updates` command.
 #[derive(Debug, StructOpt)]
-pub struct Events {
+pub struct Updates {
   #[structopt(flatten)]
-  pub event: EventType,
+  pub type_: UpdateType,
 }
 
 

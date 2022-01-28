@@ -70,14 +70,14 @@ use crate::args::ChangeOrder;
 use crate::args::Command;
 use crate::args::Config;
 use crate::args::ConfigSet;
-use crate::args::EventType;
-use crate::args::Events;
 use crate::args::Order;
 use crate::args::OrderId;
 use crate::args::Position;
 use crate::args::Side;
 use crate::args::SubmitOrder;
 use crate::args::Symbol;
+use crate::args::UpdateType;
+use crate::args::Updates;
 
 
 /// The string type we use on many occasions.
@@ -580,9 +580,9 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
   Ok(())
 }
 
-async fn events(client: Client, events: Events) -> Result<()> {
-  match events.event {
-    EventType::Trades => stream_trade_updates(client).await,
+async fn updates(client: Client, updates: Updates) -> Result<()> {
+  match updates.type_ {
+    UpdateType::Trades => stream_trade_updates(client).await,
   }
 }
 
@@ -1482,10 +1482,10 @@ async fn run() -> Result<()> {
   match args.command {
     Command::Account(account) => self::account(client, account).await,
     Command::Asset(asset) => self::asset(client, asset).await,
-    Command::Events(events) => self::events(client, events).await,
     Command::Market => self::market(client).await,
     Command::Order(order) => self::order(client, order).await,
     Command::Position(position) => self::position(client, position).await,
+    Command::Updates(updates) => self::updates(client, updates).await,
   }
 }
 
