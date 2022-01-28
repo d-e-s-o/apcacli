@@ -1261,7 +1261,7 @@ fn format_percent(percent: &Num) -> Str {
 fn format_option_percent(percent: &Option<Num>) -> Str {
   percent
     .as_ref()
-    .map(|percent| format_percent(percent))
+    .map(format_percent)
     .unwrap_or_else(|| "N/A".into())
 }
 
@@ -1275,7 +1275,7 @@ fn format_percent_gain(percent: &Num) -> Paint<Str> {
 fn format_option_percent_gain(percent: &Option<Num>) -> Paint<Str> {
   percent
     .as_ref()
-    .map(|percent| format_percent_gain(percent))
+    .map(format_percent_gain)
     .unwrap_or_else(|| Paint::default("N/A".into()))
 }
 
