@@ -158,18 +158,11 @@ pub enum Asset {
 }
 
 
-/// The type of update to stream.
-#[derive(Debug, StructOpt)]
-pub enum UpdateType {
-  /// Subscribe to trade events.
-  Trades,
-}
-
 /// A struct representing the `updates` command.
 #[derive(Debug, StructOpt)]
-pub struct Updates {
-  #[structopt(flatten)]
-  pub type_: UpdateType,
+pub enum Updates {
+  /// Subscribe to trade events.
+  Trades,
 }
 
 

@@ -76,7 +76,6 @@ use crate::args::Position;
 use crate::args::Side;
 use crate::args::SubmitOrder;
 use crate::args::Symbol;
-use crate::args::UpdateType;
 use crate::args::Updates;
 
 
@@ -581,8 +580,8 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
 }
 
 async fn updates(client: Client, updates: Updates) -> Result<()> {
-  match updates.type_ {
-    UpdateType::Trades => stream_trade_updates(client).await,
+  match updates {
+    Updates::Trades => stream_trade_updates(client).await,
   }
 }
 
