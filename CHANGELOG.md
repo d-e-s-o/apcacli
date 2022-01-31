@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.1.4
+-----
 - Removed account update streaming support via `events account`
 - Removed `--json` argument from `events` subcommand
 - Renamed `events` subcommand to `updates`
