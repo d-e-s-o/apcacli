@@ -3,6 +3,7 @@ Unreleased
 - Removed account update streaming support via `events account`
 - Removed `--json` argument from `events` subcommand
 - Renamed `events` subcommand to `updates`
+- Added support for streaming realtime market data via `updates data`
 - Formatted code base using `rustfmt` and checked in configuration
   - Added enforcement of code formatting style checks in CI
 - Bumped minimum supported Rust version to `1.56`

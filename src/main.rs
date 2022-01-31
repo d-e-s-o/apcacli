@@ -26,6 +26,7 @@ use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::api::v2::updates;
 use apca::data::v2::last_quote;
+use apca::data::v2::stream;
 use apca::ApiInfo;
 use apca::Client;
 
@@ -41,6 +42,7 @@ use chrono::DateTime;
 
 use futures::future::join;
 use futures::future::ready;
+use futures::future::FutureExt as _;
 use futures::future::TryFutureExt;
 use futures::join;
 use futures::stream::FuturesOrdered;
@@ -70,6 +72,7 @@ use crate::args::ChangeOrder;
 use crate::args::Command;
 use crate::args::Config;
 use crate::args::ConfigSet;
+use crate::args::DataSource;
 use crate::args::Order;
 use crate::args::OrderId;
 use crate::args::Position;
@@ -579,9 +582,77 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
   Ok(())
 }
 
+
+/// Subscribe to and stream realtime market data updates.
+async fn stream_realtime_data(
+  client: Client,
+  source: DataSource,
+  symbols: Vec<String>,
+) -> Result<()> {
+  let result = match source {
+    DataSource::Iex => {
+      client
+        .subscribe::<stream::RealtimeData<stream::IEX>>()
+        .await
+    },
+    DataSource::Sip => {
+      client
+        .subscribe::<stream::RealtimeData<stream::SIP>>()
+        .await
+    },
+  };
+
+  let (mut stream, mut subscription) =
+    result.with_context(|| "failed to subscribe to realtime market data updates")?;
+
+  let mut data = stream::MarketData::default();
+  data.set_bars(symbols);
+
+  let subscribe = subscription.subscribe(&data).boxed_local().fuse();
+  let () = stream::drive(subscribe, &mut stream)
+    .await
+    .map_err(|result| {
+      result
+        .map(|result| apca::Error::Json(result.unwrap_err()))
+        .map_err(apca::Error::WebSocket)
+        .unwrap_or_else(|err| err)
+    })
+    .context("failed to subscribe to market data")???;
+
+  stream
+    .try_for_each(|result| async {
+      let data = result.unwrap();
+      match data {
+        stream::Data::Bar(bar) => {
+          println!(
+            r#"{symbol}:
+  time stamp:    {timestamp}
+  open price:    {open_price}
+  close price:   {close_price}
+  high price:    {high_price}
+  low price:     {low_price}
+  volume:        {volume}"#,
+            symbol = bar.symbol,
+            timestamp = format_local_time_short(bar.timestamp),
+            open_price = bar.open_price,
+            close_price = bar.close_price,
+            high_price = bar.high_price,
+            low_price = bar.low_price,
+            volume = bar.volume,
+          );
+        },
+      }
+      Ok(())
+    })
+    .await?;
+
+  Ok(())
+}
+
 async fn updates(client: Client, updates: Updates) -> Result<()> {
   match updates {
     Updates::Trades => stream_trade_updates(client).await,
+    Updates::Data { source, symbols } => stream_realtime_data(client, source, symbols).await,
   }
 }
 

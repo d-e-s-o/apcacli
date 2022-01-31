@@ -158,11 +158,47 @@ pub enum Asset {
 }
 
 
+/// A enumeration of all supported realtime market data sources.
+#[derive(Copy, Clone, Debug, StructOpt)]
+pub enum DataSource {
+  /// Use the Investors Exchange (IEX) as the data source.
+  Iex,
+  /// Use CTA (administered by NYSE) and UTP (administered by Nasdaq)
+  /// SIPs as the data source.
+  ///
+  /// This source is only usable with the unlimited market data plan.
+  Sip,
+}
+
+impl FromStr for DataSource {
+  type Err = String;
+
+  fn from_str(side: &str) -> Result<Self, Self::Err> {
+    match side {
+      "iex" => Ok(DataSource::Iex),
+      "sip" => Ok(DataSource::Sip),
+      s => Err(format!(
+        "{} is not a valid data source (use 'iex' or 'sip')",
+        s
+      )),
+    }
+  }
+}
+
+
 /// A struct representing the `updates` command.
 #[derive(Debug, StructOpt)]
 pub enum Updates {
   /// Subscribe to trade events.
   Trades,
+  /// Subscribe to realtime market data aggregates.
+  Data {
+    /// The symbols for which to receive aggregate data.
+    symbols: Vec<String>,
+    /// The data source to use.
+    #[structopt(long, default_value = "iex")]
+    source: DataSource,
+  },
 }
 
 
