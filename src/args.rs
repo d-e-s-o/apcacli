@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2022 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::fmt::Debug;
@@ -6,6 +6,9 @@ use std::str::FromStr;
 
 use apca::api::v2::asset;
 use apca::api::v2::order;
+
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 
 use num_decimal::Num;
 
@@ -34,6 +37,8 @@ pub enum Command {
   Account(Account),
   /// Retrieve information pertaining assets.
   Asset(Asset),
+  /// Retrieve historical aggregate bars for an asset.
+  Bars(Bars),
   /// Retrieve status information about the market.
   Market,
   /// Perform various order related functions.
@@ -155,6 +160,64 @@ pub enum Asset {
   },
   /// List all assets.
   List,
+}
+
+
+/// An indication when/for how long an order is valid.
+#[derive(Debug)]
+pub enum TimeFrame {
+  /// Retrieve historical data aggregated per day.
+  Day,
+  /// Retrieve historical data aggregated per hour.
+  Hour,
+  /// Retrieve historical data aggregated per minute.
+  Minute,
+}
+
+impl FromStr for TimeFrame {
+  type Err = String;
+
+  fn from_str(side: &str) -> Result<Self, Self::Err> {
+    match side {
+      "day" => Ok(TimeFrame::Day),
+      "hour" => Ok(TimeFrame::Hour),
+      "minute" => Ok(TimeFrame::Minute),
+      s => Err(format!(
+        "{} is not a valid time frame specification (use 'day', 'hour', or 'minute')",
+        s
+      )),
+    }
+  }
+}
+
+
+/// Parse a `DateTime` from a provided date or datetime string.
+fn parse_date_time(s: &str) -> Result<NaiveDateTime, String> {
+  match NaiveDateTime::from_str(s) {
+    Ok(date_time) => Ok(date_time),
+    Err(_) => NaiveDate::from_str(s)
+      .map(|date| date.and_hms(0, 0, 0))
+      .map_err(|err| err.to_string()),
+  }
+}
+
+
+/// An enumeration representing the `bars` command.
+#[derive(Debug, StructOpt)]
+pub enum Bars {
+  /// Retrieve historical aggregate bars for a symbol.
+  Get {
+    /// The asset for which to retrieve historical aggregate bars.
+    symbol: String,
+    /// The aggregation time frame.
+    time_frame: TimeFrame,
+    /// The start time for which to retrieve bars.
+    #[structopt(parse(try_from_str = parse_date_time))]
+    start: NaiveDateTime,
+    /// The end time for which to retrieve bars.
+    #[structopt(parse(try_from_str = parse_date_time))]
+    end: NaiveDateTime,
+  },
 }
 
 

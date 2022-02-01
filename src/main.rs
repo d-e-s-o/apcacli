@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2019-2022 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
@@ -8,6 +8,7 @@ mod args;
 
 use std::borrow::Cow;
 use std::cmp::max;
+use std::fmt::Display;
 use std::future::Future;
 use std::io::stdout;
 use std::io::Write;
@@ -25,6 +26,7 @@ use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::api::v2::updates;
+use apca::data::v2::bars;
 use apca::data::v2::last_quote;
 use apca::data::v2::stream;
 use apca::ApiInfo;
@@ -39,6 +41,11 @@ use anyhow::Result;
 use chrono::offset::Local;
 use chrono::offset::Utc;
 use chrono::DateTime;
+use chrono::Datelike as _;
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Timelike as _;
+use chrono_tz::America::New_York;
 
 use futures::future::join;
 use futures::future::ready;
@@ -67,6 +74,7 @@ use crate::args::Account;
 use crate::args::Activity;
 use crate::args::Args;
 use crate::args::Asset;
+use crate::args::Bars;
 use crate::args::CancelOrder;
 use crate::args::ChangeOrder;
 use crate::args::Command;
@@ -79,6 +87,7 @@ use crate::args::Position;
 use crate::args::Side;
 use crate::args::SubmitOrder;
 use crate::args::Symbol;
+use crate::args::TimeFrame;
 use crate::args::Updates;
 
 
@@ -436,6 +445,93 @@ async fn asset_list(client: Client) -> Result<()> {
     );
   }
   Ok(())
+}
+
+
+/// The handler for the 'bars' command.
+async fn bars(client: Client, bars: Bars) -> Result<()> {
+  match bars {
+    Bars::Get {
+      symbol,
+      time_frame,
+      start,
+      end,
+    } => bars_get(client, symbol, time_frame, start, end).await,
+  }
+}
+
+/// Retrieve and print historical aggregate bars for an asset.
+async fn bars_get(
+  client: Client,
+  symbol: String,
+  time_frame: TimeFrame,
+  start: NaiveDateTime,
+  end: NaiveDateTime,
+) -> Result<()> {
+  let time_frame = match time_frame {
+    TimeFrame::Day => bars::TimeFrame::OneDay,
+    TimeFrame::Hour => bars::TimeFrame::OneHour,
+    TimeFrame::Minute => bars::TimeFrame::OneMinute,
+  };
+
+  let mut request = bars::BarReq {
+    symbol: symbol.to_string(),
+    limit: None,
+    start: New_York
+      .ymd(start.year(), start.month(), start.day())
+      .and_hms(start.hour(), start.minute(), start.second())
+      .with_timezone(&Utc),
+    end: New_York
+      .ymd(end.year(), end.month(), end.day())
+      .and_hms(end.hour(), end.minute(), end.second())
+      .with_timezone(&Utc),
+    timeframe: time_frame,
+    page_token: None,
+    adjustment: Some(bars::Adjustment::All),
+  };
+
+  loop {
+    let response = client.issue::<bars::Get>(&request).await.with_context(|| {
+      format!(
+        "failed to retrieve historical aggregate bars for {}",
+        symbol
+      )
+    })?;
+    for bar in response.bars {
+      let time = New_York.from_utc_datetime(&bar.time.naive_utc());
+      println!(
+        r#"{timestamp}:
+  open price:    {open_price}
+  close price:   {close_price}
+  high price:    {high_price}
+  low price:     {low_price}
+  volume:        {volume}
+"#,
+        timestamp = format_date_time(time),
+        open_price = bar.open,
+        close_price = bar.close,
+        high_price = bar.high,
+        low_price = bar.low,
+        volume = bar.volume,
+      );
+    }
+
+    if response.next_page_token.is_none() {
+      break Ok(())
+    }
+
+    request.page_token = response.next_page_token;
+  }
+}
+
+
+/// Format a date time.
+fn format_date_time<TZ>(time: DateTime<TZ>) -> Str
+where
+  TZ: TimeZone,
+  TZ::Offset: Display,
+{
+  time.to_rfc2822().into()
 }
 
 /// Format a date time as per RFC 2822, after converting to local date
@@ -1552,6 +1648,7 @@ async fn run() -> Result<()> {
   match args.command {
     Command::Account(account) => self::account(client, account).await,
     Command::Asset(asset) => self::asset(client, asset).await,
+    Command::Bars(bars) => self::bars(client, bars).await,
     Command::Market => self::market(client).await,
     Command::Order(order) => self::order(client, order).await,
     Command::Position(position) => self::position(client, position).await,

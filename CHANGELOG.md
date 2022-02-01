@@ -1,3 +1,9 @@
+Unreleased
+----------
+- Added support for historic aggregate bar retrieval via `bars`
+  subcommand
+
+
 0.1.4
 -----
 - Removed account update streaming support via `events account`
