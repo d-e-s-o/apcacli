@@ -2,6 +2,8 @@ Unreleased
 ----------
 - Added support for historic aggregate bar retrieval via `bars`
   subcommand
+- Adjusted build script to handle non-existent `git` command or
+  repository gracefully
 
 
 0.1.4
