@@ -58,5 +58,8 @@ fn main() -> Result<()> {
     env!("CARGO_PKG_VERSION"),
     revision.trim()
   );
+  // Make sure to run this script again if any relevant version control
+  // files changes (e.g., when creating a commit).
+  println!("cargo:rerun-if-changed=.git/index");
   Ok(())
 }
