@@ -75,6 +75,7 @@ use crate::args::Account;
 use crate::args::Activity;
 use crate::args::Args;
 use crate::args::Asset;
+use crate::args::AssetClass;
 use crate::args::Bars;
 use crate::args::CancelOrder;
 use crate::args::ChangeOrder;
@@ -388,7 +389,7 @@ async fn account_config_set(client: Client, set: ConfigSet) -> Result<()> {
 async fn asset(client: Client, asset: Asset) -> Result<()> {
   match asset {
     Asset::Get { symbol } => asset_get(client, symbol).await,
-    Asset::List => asset_list(client).await,
+    Asset::List { class } => asset_list(client, class).await,
   }
 }
 
@@ -422,12 +423,14 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<()> {
   Ok(())
 }
 
-/// Print all tradable assets.
-async fn asset_list(client: Client) -> Result<()> {
-  let request = assets::AssetsReq {
-    status: asset::Status::Active,
-    class: asset::Class::UsEquity,
-  };
+/// Print all tradeable assets.
+async fn asset_list(client: Client, class: AssetClass) -> Result<()> {
+  let request = assets::AssetsReqInit {
+    class: class.0,
+    ..Default::default()
+  }
+  .init();
+
   let mut assets = client
     .issue::<assets::Get>(&request)
     .await

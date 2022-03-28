@@ -95,7 +95,22 @@ impl FromStr for Symbol {
     let sym =
       asset::Symbol::from_str(sym).map_err(|e| format!("failed to parse symbol {}: {}", sym, e))?;
 
-    Ok(Symbol(sym))
+    Ok(Self(sym))
+  }
+}
+
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AssetClass(pub asset::Class);
+
+impl FromStr for AssetClass {
+  type Err = String;
+
+  fn from_str(class: &str) -> Result<Self, Self::Err> {
+    let class = asset::Class::from_str(class)
+      .map_err(|()| format!("provided asset class '{}' is invalid", class))?;
+
+    Ok(Self(class))
   }
 }
 
@@ -159,7 +174,15 @@ pub enum Asset {
     symbol: Symbol,
   },
   /// List all assets.
-  List,
+  List {
+    #[structopt(
+      short,
+      long,
+      default_value = asset::Class::UsEquity.as_ref(),
+      possible_values = &[asset::Class::Crypto.as_ref(), asset::Class::UsEquity.as_ref()]
+    )]
+    class: AssetClass,
+  },
 }
 
 

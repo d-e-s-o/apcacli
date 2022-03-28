@@ -2,6 +2,8 @@ Unreleased
 ----------
 - Added support for historic aggregate bar retrieval via `bars`
   subcommand
+- Added support for specifying the asset class to use to `asset list`
+  subcommand
 - Adjusted build script to handle non-existent `git` command or
   repository gracefully
 - Bumped `apca` dependency to `0.23.0`
