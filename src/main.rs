@@ -555,25 +555,25 @@ fn format_date(time: DateTime<Utc>) -> Str {
   time.date().format("%Y-%m-%d").to_string().into()
 }
 
-fn format_trade_status(status: updates::TradeStatus) -> &'static str {
+fn format_trade_status(status: updates::OrderStatus) -> &'static str {
   match status {
-    updates::TradeStatus::New => "new",
-    updates::TradeStatus::Replaced => "replaced",
-    updates::TradeStatus::ReplaceRejected => "replace rejected",
-    updates::TradeStatus::PartialFill => "partially filled",
-    updates::TradeStatus::Filled => "filled",
-    updates::TradeStatus::DoneForDay => "done for day",
-    updates::TradeStatus::Canceled => "canceled",
-    updates::TradeStatus::CancelRejected => "cancel rejected",
-    updates::TradeStatus::Expired => "expired",
-    updates::TradeStatus::PendingCancel => "pending cancel",
-    updates::TradeStatus::Stopped => "stopped",
-    updates::TradeStatus::Rejected => "rejected",
-    updates::TradeStatus::Suspended => "suspended",
-    updates::TradeStatus::PendingNew => "pending new",
-    updates::TradeStatus::PendingReplace => "pending replace",
-    updates::TradeStatus::Calculated => "calculated",
-    updates::TradeStatus::Unknown => "unknown",
+    updates::OrderStatus::New => "new",
+    updates::OrderStatus::Replaced => "replaced",
+    updates::OrderStatus::ReplaceRejected => "replace rejected",
+    updates::OrderStatus::PartialFill => "partially filled",
+    updates::OrderStatus::Filled => "filled",
+    updates::OrderStatus::DoneForDay => "done for day",
+    updates::OrderStatus::Canceled => "canceled",
+    updates::OrderStatus::CancelRejected => "cancel rejected",
+    updates::OrderStatus::Expired => "expired",
+    updates::OrderStatus::PendingCancel => "pending cancel",
+    updates::OrderStatus::Stopped => "stopped",
+    updates::OrderStatus::Rejected => "rejected",
+    updates::OrderStatus::Suspended => "suspended",
+    updates::OrderStatus::PendingNew => "pending new",
+    updates::OrderStatus::PendingReplace => "pending replace",
+    updates::OrderStatus::Calculated => "calculated",
+    updates::OrderStatus::Unknown => "unknown",
   }
 }
 
@@ -645,7 +645,7 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
     .currency;
 
   let (stream, _subscription) = client
-    .subscribe::<updates::TradeUpdates>()
+    .subscribe::<updates::OrderUpdates>()
     .await
     .with_context(|| "failed to subscribe to trade updates")?;
 
