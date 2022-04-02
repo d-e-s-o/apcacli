@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.1.5
+-----
 - Added support for historic aggregate bar retrieval via `bars`
   subcommand
 - Added support for specifying the asset class to use to `asset list`
