@@ -78,7 +78,7 @@ lint:clippy:
     policy: pull
   script:
   - rustup component add clippy
-  - cargo clippy --no-deps --all-targets --all-features -- -A unknown_lints -D warnings
+  - cargo clippy --no-deps --all-targets --all-features --tests -- -A unknown_lints -D warnings
 
 format:rustfmt:
   script:
