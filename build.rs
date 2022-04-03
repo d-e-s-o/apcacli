@@ -12,8 +12,9 @@ const GIT: &str = "git";
 
 /// Format a git command with the given list of arguments as a string.
 fn git_command(args: &[&str]) -> String {
-  args.iter().fold(GIT.to_string() + " ", |mut cmd, arg| {
-    cmd += &(" ".to_owned() + arg);
+  args.iter().fold(GIT.to_string(), |mut cmd, arg| {
+    cmd += " ";
+    cmd += arg;
     cmd
   })
 }
