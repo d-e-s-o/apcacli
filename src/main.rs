@@ -474,7 +474,7 @@ async fn bars_get(
     TimeFrame::Minute => bars::TimeFrame::OneMinute,
   };
 
-  let mut request = bars::BarReq {
+  let mut request = bars::BarsReq {
     symbol: symbol.to_string(),
     limit: None,
     start: New_York

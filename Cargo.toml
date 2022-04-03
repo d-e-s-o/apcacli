@@ -2,7 +2,7 @@
 name = "apcacli"
 version = "0.1.4"
 authors = ["Daniel Mueller <deso@posteo.net>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later"
 homepage = "https://github.com/d-e-s-o/apcacli"
 repository = "https://github.com/d-e-s-o/apcacli.git"
