@@ -64,6 +64,7 @@ use structopt::StructOpt;
 use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
+use tracing::warn;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
@@ -474,21 +475,19 @@ async fn bars_get(
     TimeFrame::Minute => bars::TimeFrame::OneMinute,
   };
 
-  let mut request = bars::BarsReq {
-    symbol: symbol.to_string(),
-    limit: None,
-    start: New_York
-      .ymd(start.year(), start.month(), start.day())
-      .and_hms(start.hour(), start.minute(), start.second())
-      .with_timezone(&Utc),
-    end: New_York
-      .ymd(end.year(), end.month(), end.day())
-      .and_hms(end.hour(), end.minute(), end.second())
-      .with_timezone(&Utc),
-    timeframe: time_frame,
-    page_token: None,
+  let start = New_York
+    .ymd(start.year(), start.month(), start.day())
+    .and_hms(start.hour(), start.minute(), start.second())
+    .with_timezone(&Utc);
+  let end = New_York
+    .ymd(end.year(), end.month(), end.day())
+    .and_hms(end.hour(), end.minute(), end.second())
+    .with_timezone(&Utc);
+  let mut request = bars::BarsReqInit {
     adjustment: Some(bars::Adjustment::All),
-  };
+    ..Default::default()
+  }
+  .init(symbol.clone(), start, end, time_frame);
 
   loop {
     let response = client.issue::<bars::Get>(&request).await.with_context(|| {
@@ -737,6 +736,7 @@ async fn stream_realtime_data(
             volume = bar.volume,
           );
         },
+        _ => warn!("received unexpected stream element: {:?}", data),
       }
       Ok(())
     })
@@ -786,8 +786,9 @@ async fn value_to_quantity(
   let price = match price {
     Some(price) => price,
     None => {
+      let request = last_quote::LastQuoteReqInit::default().init(symbol);
       let quote = client
-        .issue::<last_quote::Get>(&symbol.to_string())
+        .issue::<last_quote::Get>(&request)
         .await
         .with_context(|| format!("failed to retrieve last quote for {}", symbol))?;
 
@@ -985,7 +986,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
       //       open orders (unlikely but possible).
       let request = orders::OrdersReq {
         status: orders::Status::Open,
-        limit: 500,
+        limit: Some(500),
         // No need to retrieve nested orders here, they should be
         // canceled automatically when the "parent" is canceled.
         nested: false,
@@ -1209,7 +1210,7 @@ async fn order_list(client: Client, closed: bool) -> Result<()> {
     } else {
       orders::Status::Open
     },
-    limit: 500,
+    limit: Some(500),
     nested: true,
   };
 

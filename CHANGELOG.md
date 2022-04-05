@@ -4,6 +4,7 @@ Unreleased
   subcommand
 - Adjusted build script to handle non-existent `git` command or
   repository gracefully
+- Bumped `apca` dependency to `0.23.0`
 
 
 0.1.4
