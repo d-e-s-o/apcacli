@@ -32,6 +32,7 @@ use apca::data::v2::stream;
 use apca::ApiInfo;
 use apca::Client;
 
+use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::ensure;
 use anyhow::Context;
@@ -847,11 +848,21 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
     limit_price,
     stop_price,
     take_profit_price,
+    stop_loss_stop_price,
+    stop_loss_limit_price,
     extended_hours,
     time_in_force,
   } = submit;
 
-  let class = if take_profit_price.is_some() {
+  if stop_loss_limit_price.is_some() && stop_loss_stop_price.is_none() {
+    return Err(anyhow!(
+      "cannot create an one-triggers-other stop loss order without a
+       specified stop-loss-stop-price"
+    ))
+  }
+  let class = if take_profit_price.is_some() && stop_loss_stop_price.is_some() {
+    order::Class::Bracket
+  } else if take_profit_price.is_some() || stop_loss_stop_price.is_some() {
     order::Class::OneTriggersOther
   } else {
     order::Class::Simple
@@ -883,6 +894,13 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
 
   let type_ = determine_order_type(&limit_price, &stop_price);
   let take_profit = take_profit_price.map(order::TakeProfit::Limit);
+  let stop_loss = match stop_loss_stop_price {
+    Some(stop_price) => match stop_loss_limit_price {
+      Some(limit_price) => Some(order::StopLoss::StopLimit(stop_price, limit_price)),
+      None => Some(order::StopLoss::Stop(stop_price)),
+    },
+    None => None,
+  };
   let time_in_force = time_in_force.to_time_in_force();
 
   // TODO: We should probably support other forms of specifying
@@ -894,6 +912,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
     limit_price,
     stop_price,
     take_profit,
+    stop_loss,
     extended_hours,
     ..Default::default()
   }

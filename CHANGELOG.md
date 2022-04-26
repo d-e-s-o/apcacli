@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Added support for submission of more kinds of bracket orders
+
+
 0.1.5
 -----
 - Added support for historic aggregate bar retrieval via `bars`
