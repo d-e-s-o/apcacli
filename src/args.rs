@@ -18,6 +18,7 @@ use structopt::StructOpt;
 use uuid::Error as UuidError;
 use uuid::Uuid;
 
+
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, StructOpt)]
 #[structopt(about, version = env!("VERSION"))]
@@ -47,6 +48,7 @@ pub enum Command {
   /// Subscribe to some update stream.
   Updates(Updates),
 }
+
 
 /// An indication when/for how long an order is valid.
 #[derive(Debug)]
@@ -82,6 +84,7 @@ impl FromStr for TimeInForce {
   }
 }
 
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Symbol(pub asset::Symbol);
 
@@ -96,6 +99,7 @@ impl FromStr for Symbol {
   }
 }
 
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetClass(pub asset::Class);
 
@@ -109,6 +113,7 @@ impl FromStr for AssetClass {
     Ok(Self(class))
   }
 }
+
 
 /// An enumeration representing the `account` command.
 #[derive(Debug, StructOpt)]
@@ -159,6 +164,7 @@ pub struct ConfigSet {
   pub no_shorting: bool,
 }
 
+
 /// An enumeration representing the `asset` command.
 #[derive(Debug, StructOpt)]
 pub enum Asset {
@@ -178,6 +184,7 @@ pub enum Asset {
     class: AssetClass,
   },
 }
+
 
 /// An indication when/for how long an order is valid.
 #[derive(Debug)]
@@ -206,6 +213,7 @@ impl FromStr for TimeFrame {
   }
 }
 
+
 /// Parse a `DateTime` from a provided date or datetime string.
 fn parse_date_time(s: &str) -> Result<NaiveDateTime, String> {
   match NaiveDateTime::from_str(s) {
@@ -215,6 +223,7 @@ fn parse_date_time(s: &str) -> Result<NaiveDateTime, String> {
       .map_err(|err| err.to_string()),
   }
 }
+
 
 /// An enumeration representing the `bars` command.
 #[derive(Debug, StructOpt)]
@@ -233,6 +242,7 @@ pub enum Bars {
     end: NaiveDateTime,
   },
 }
+
 
 /// A enumeration of all supported realtime market data sources.
 #[derive(Copy, Clone, Debug, StructOpt)]
@@ -261,6 +271,7 @@ impl FromStr for DataSource {
   }
 }
 
+
 /// A struct representing the `updates` command.
 #[derive(Debug, StructOpt)]
 pub enum Updates {
@@ -275,6 +286,7 @@ pub enum Updates {
     source: DataSource,
   },
 }
+
 
 /// An enumeration representing the `order` command.
 #[derive(Debug, StructOpt)]
@@ -300,6 +312,7 @@ pub enum Order {
   },
 }
 
+
 /// A type representing the options to submit an order.
 #[derive(Debug, StructOpt)]
 pub struct SubmitOrder {
@@ -319,16 +332,23 @@ pub struct SubmitOrder {
   /// Create a stop order (or stop limit order) with the given stop price.
   #[structopt(short = "s", long)]
   pub stop_price: Option<Num>,
-  /// Create a one-triggers-other order with the given take-profit price.
+  /// The take_profit_price, stop_loss_stop_price and stop_loss_limit_price
+  /// arguments can be used to create either OTO or Bracket orders. OCO orders
+  /// are not currently supported.
+  /// https://alpaca.markets/docs/trading/orders/#oto-orders
+  /// https://alpaca.markets/docs/trading/orders/#bracket-orders
+  /// 
+  /// Create a one-triggers-other or bracket order with the given take-profit
+  /// price.
   #[structopt(long)]
   pub take_profit_price: Option<Num>,
-  /// Create a one-triggers-other order with the given stop_price under the
-  /// stop_loss dvanced order leg.
+  /// Create a one-triggers-other or bracket order with the given stop_price
+  /// under the stop_loss advanced order leg.
   #[structopt(long)]
   pub stop_loss_stop_price: Option<Num>,
-  /// Create a one-triggers-other order with the given limit_price under the
-  /// stop_loss dvanced order leg. Note that this option can only be used in
-  /// conjunction with stop_loss_stop_price.
+  /// Create a one-triggers-other or bracket order with the given limit_price
+  /// under the stop_loss advanced order leg. Note that this option can only be
+  /// used in conjunction with stop_loss_stop_price.
   #[structopt(long)]
   pub stop_loss_limit_price: Option<Num>,
   /// Create an order that is eligible to execute during
@@ -365,6 +385,7 @@ pub struct ChangeOrder {
   pub time_in_force: Option<TimeInForce>,
 }
 
+
 /// An enumeration of the different options for order cancellation.
 #[derive(Debug)]
 pub enum CancelOrder {
@@ -385,6 +406,7 @@ impl FromStr for CancelOrder {
     Ok(cancel)
   }
 }
+
 
 #[derive(Debug, StructOpt)]
 pub enum Side {
@@ -409,6 +431,7 @@ impl FromStr for Side {
   }
 }
 
+
 #[derive(Debug)]
 pub struct OrderId(pub order::Id);
 
@@ -419,6 +442,7 @@ impl FromStr for OrderId {
     Ok(OrderId(order::Id(Uuid::parse_str(id)?)))
   }
 }
+
 
 #[derive(Debug, StructOpt)]
 pub enum Position {

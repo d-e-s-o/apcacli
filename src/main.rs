@@ -93,8 +93,10 @@ use crate::args::Symbol;
 use crate::args::TimeFrame;
 use crate::args::Updates;
 
+
 /// The string type we use on many occasions.
 type Str = Cow<'static, str>;
+
 
 // A replacement of the standard println!() macro that does not panic
 // when encountering an EPIPE.
@@ -107,6 +109,7 @@ macro_rules! println {
     }
   };
 }
+
 
 /// Format an account status.
 fn format_account_status(status: account::Status) -> String {
@@ -122,6 +125,7 @@ fn format_account_status(status: account::Status) -> String {
   }
   .to_string()
 }
+
 
 /// The handler for the 'account' command.
 async fn account(client: Client, account: Account) -> Result<()> {
@@ -181,6 +185,7 @@ async fn account_get(client: Client) -> Result<()> {
   Ok(())
 }
 
+
 /// The handler for the 'account activity' command.
 async fn account_activity(client: Client, activity: Activity) -> Result<()> {
   match activity {
@@ -236,6 +241,7 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
   }
 }
 
+
 /// Sort a vector of `Activity` objects in descending order of their
 /// time stamps.
 fn sort_account_activity(activities: &mut Vec<account_activities::Activity>) {
@@ -257,6 +263,7 @@ fn sort_account_activity(activities: &mut Vec<account_activities::Activity>) {
     ordering.reverse()
   });
 }
+
 
 /// Retrieve account activity.
 async fn account_activity_get(client: Client) -> Result<()> {
@@ -297,6 +304,7 @@ async fn account_activity_get(client: Client) -> Result<()> {
   Ok(())
 }
 
+
 /// Retrieve or modify the account configuration.
 async fn account_config(client: Client, config: Config) -> Result<()> {
   match config {
@@ -304,6 +312,7 @@ async fn account_config(client: Client, config: Config) -> Result<()> {
     Config::Set(set) => account_config_set(client, set).await,
   }
 }
+
 
 /// Format an account status.
 fn format_trade_confirmation(confirmation: account_config::TradeConfirmation) -> &'static str {
@@ -376,6 +385,7 @@ async fn account_config_set(client: Client, set: ConfigSet) -> Result<()> {
   Ok(())
 }
 
+
 /// The handler for the 'asset' command.
 async fn asset(client: Client, asset: Asset) -> Result<()> {
   match asset {
@@ -441,6 +451,7 @@ async fn asset_list(client: Client, class: AssetClass) -> Result<()> {
   }
   Ok(())
 }
+
 
 /// The handler for the 'bars' command.
 async fn bars(client: Client, bars: Bars) -> Result<()> {
@@ -509,12 +520,13 @@ async fn bars_get(
     }
 
     if response.next_page_token.is_none() {
-      break Ok(());
+      break Ok(())
     }
 
     request.page_token = response.next_page_token;
   }
 }
+
 
 /// Format a date time.
 fn format_date_time<TZ>(time: DateTime<TZ>) -> Str
@@ -625,6 +637,7 @@ fn format_time_in_force_short(time_in_force: order::TimeInForce) -> &'static str
   }
 }
 
+
 async fn stream_trade_updates(client: Client) -> Result<()> {
   let currency = client
     .issue::<account::Get>(&())
@@ -667,6 +680,7 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
 
   Ok(())
 }
+
 
 /// Subscribe to and stream realtime market data updates.
 async fn stream_realtime_data(
@@ -763,6 +777,7 @@ async fn market(client: Client) -> Result<()> {
   Ok(())
 }
 
+
 /// Convert a certain monetary value into the maximum number of shares
 /// purchasable (i.e., a quantity).
 async fn value_to_quantity(
@@ -798,6 +813,7 @@ async fn value_to_quantity(
   Ok(value / price)
 }
 
+
 /// The handler for the 'order' command.
 async fn order(client: Client, order: Order) -> Result<()> {
   match order {
@@ -809,6 +825,7 @@ async fn order(client: Client, order: Order) -> Result<()> {
   }
 }
 
+
 /// Determine the type of an order by looking at the limit and stop
 /// prices, if any.
 fn determine_order_type(limit_price: &Option<Num>, stop_price: &Option<Num>) -> order::Type {
@@ -819,6 +836,7 @@ fn determine_order_type(limit_price: &Option<Num>, stop_price: &Option<Num>) -> 
     (false, false) => order::Type::Market,
   }
 }
+
 
 /// Submit an order.
 async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
@@ -875,15 +893,16 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
 
   let type_ = determine_order_type(&limit_price, &stop_price);
   let take_profit = take_profit_price.map(order::TakeProfit::Limit);
-  let stop_loss = if stop_loss_stop_price.is_some() && stop_loss_limit_price.is_some() {
-    Some(order::StopLoss::StopLimit(
-      stop_loss_stop_price.unwrap(),
-      stop_loss_limit_price.unwrap(),
-    ))
-  } else if stop_loss_stop_price.is_some() {
-    Some(order::StopLoss::Stop(stop_loss_stop_price.unwrap()))
-  } else {
-    None
+  let stop_loss = match stop_loss_stop_price {
+    Some(stop_price) => {
+      match stop_loss_limit_price {
+        Some(limit_price) => {
+          Some(order::StopLoss::StopLimit(stop_price, limit_price))
+        },
+        None => Some(order::StopLoss::Stop(stop_price))
+      }
+    },
+    None => None
   };
   let time_in_force = time_in_force.to_time_in_force();
 
@@ -913,6 +932,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
   }
   Ok(())
 }
+
 
 /// Change an order.
 async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
@@ -978,6 +998,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
   Ok(())
 }
 
+
 /// Cancel an open order.
 async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
   match cancel {
@@ -1015,6 +1036,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
     },
   }
 }
+
 
 /// Retrieve information about an order.
 async fn order_get(client: Client, id: OrderId) -> Result<()> {
@@ -1091,6 +1113,7 @@ async fn order_get(client: Client, id: OrderId) -> Result<()> {
   Ok(())
 }
 
+
 /// Determine the maximum width of values produced by applying a
 /// function on each element of a slice.
 fn max_width<T, F>(slice: &[T], f: F) -> usize
@@ -1166,7 +1189,7 @@ fn format_approximate_quantity(quantity: &Num) -> String {
   let mut precision = 0usize;
   let rounded = loop {
     if quantity >= &Num::new(10, denom) {
-      break quantity.round_with(precision.saturating_sub(1));
+      break quantity.round_with(precision.saturating_sub(1))
     } else {
       denom = denom.checked_mul(10).unwrap();
       precision = precision.checked_add(1).unwrap();
@@ -1267,6 +1290,7 @@ async fn order_list(client: Client, closed: bool) -> Result<()> {
   Ok(())
 }
 
+
 /// The handler for the 'position' command.
 async fn position(client: Client, position: Position) -> Result<()> {
   match position {
@@ -1327,6 +1351,7 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<()> {
   Ok(())
 }
 
+
 /// Liquidate a position for a certain asset.
 async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
   let currency = client.issue::<account::Get>(&());
@@ -1361,6 +1386,7 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
   );
   Ok(())
 }
+
 
 /// Format a price value.
 fn format_price(price: &Num, currency: &str) -> Str {
@@ -1417,6 +1443,7 @@ fn format_option_gain(price: &Option<Num>, currency: &str) -> Paint<Str> {
     .unwrap_or_else(|| Paint::default("N/A".into()))
 }
 
+
 /// Format a percentage value.
 fn format_percent(percent: &Num) -> Str {
   format!("{:.2}%", percent * 100).into()
@@ -1429,6 +1456,7 @@ fn format_option_percent(percent: &Option<Num>) -> Str {
     .map(format_percent)
     .unwrap_or_else(|| "N/A".into())
 }
+
 
 /// Format percent gain.
 fn format_percent_gain(percent: &Num) -> Paint<Str> {
@@ -1443,6 +1471,7 @@ fn format_option_percent_gain(percent: &Option<Num>) -> Paint<Str> {
     .unwrap_or_else(|| Paint::default("N/A".into()))
 }
 
+
 /// Format a quantity for a position.
 fn format_position_quantity(quantity: &Num, side: position::Side) -> String {
   match side {
@@ -1450,6 +1479,7 @@ fn format_position_quantity(quantity: &Num, side: position::Side) -> String {
     position::Side::Short => (-quantity).to_string(),
   }
 }
+
 
 /// Print a table with the given positions.
 fn position_print(positions: &[position::Position], currency: &str) {
@@ -1673,9 +1703,11 @@ fn main() {
   exit(exit_code)
 }
 
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
 
   /// Check that the `format_approximate_quantity` function works as expected.
   #[test]
