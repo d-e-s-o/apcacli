@@ -10,42 +10,52 @@ use apca::api::v2::order;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 
-use num_decimal::Num;
+use clap::ArgEnum;
+use clap::ArgGroup;
+use clap::Args as ClapArgs;
+use clap::Parser;
+use clap::Subcommand;
 
-use structopt::clap::ArgGroup;
-use structopt::StructOpt;
+use num_decimal::Num;
 
 use uuid::Error as UuidError;
 use uuid::Uuid;
 
 
-/// A command line client for automated trading with Alpaca.
-#[derive(Debug, StructOpt)]
-#[structopt(about, version = env!("VERSION"))]
+/// A command line tool for trading stocks on Alpaca (alpaca.markets).
+#[derive(Debug, Parser)]
+#[clap(version = env!("VERSION"))]
 pub struct Args {
-  #[structopt(subcommand)]
+  #[clap(subcommand)]
   pub command: Command,
   /// Increase verbosity (can be supplied multiple times).
-  #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
+  #[clap(short = 'v', long = "verbose", global = true, parse(from_occurrences))]
   pub verbosity: usize,
 }
 
-/// A command line client for automated trading with Alpaca.
-#[derive(Debug, StructOpt)]
+/// A command line tool for trading stocks on Alpaca (alpaca.markets).
+#[derive(Debug, Subcommand)]
 pub enum Command {
   /// Retrieve information about the Alpaca account.
+  #[clap(subcommand)]
   Account(Account),
   /// Retrieve information pertaining assets.
+  #[clap(subcommand)]
   Asset(Asset),
   /// Retrieve historical aggregate bars for an asset.
+  #[clap(subcommand)]
   Bars(Bars),
   /// Retrieve status information about the market.
+  #[clap(arg_enum)]
   Market,
   /// Perform various order related functions.
+  #[clap(subcommand)]
   Order(Order),
   /// Perform various position related functions.
+  #[clap(subcommand)]
   Position(Position),
   /// Subscribe to some update stream.
+  #[clap(subcommand)]
   Updates(Updates),
 }
 
@@ -116,57 +126,62 @@ impl FromStr for AssetClass {
 
 
 /// An enumeration representing the `account` command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Account {
   /// Query and print information about the account.
+  #[clap(arg_enum)]
   Get,
   /// Retrieve account activity.
+  #[clap(subcommand)]
   Activity(Activity),
   /// Retrieve and modify the account configuration.
+  #[clap(subcommand)]
   Config(Config),
 }
 
 /// An enumeration representing the `account activity` sub command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Activity {
   /// Retrieve account activity.
+  #[clap(arg_enum)]
   Get,
 }
 
 /// An enumeration representing the `account config` sub command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Config {
   /// Retrieve the account configuration.
+  #[clap(arg_enum)]
   Get,
   /// Modify the account configuration.
   Set(ConfigSet),
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, ClapArgs)]
 pub struct ConfigSet {
   /// Enable e-mail trade confirmations.
-  #[structopt(short = "e", long)]
+  #[clap(short = 'e', long)]
   pub confirm_email: bool,
   /// Disable e-mail trade confirmations.
-  #[structopt(short = "E", long, conflicts_with("confirm-email"))]
+  #[clap(short = 'E', long, conflicts_with("confirm-email"))]
   pub no_confirm_email: bool,
   /// Suspend trading.
-  #[structopt(short = "t", long)]
+  #[clap(short = 't', long)]
   pub trading_suspended: bool,
   /// Resume trading.
-  #[structopt(short = "T", long, conflicts_with("trading-suspended"))]
+  #[clap(short = 'T', long, conflicts_with("trading-suspended"))]
   pub no_trading_suspended: bool,
   /// Enable shorting.
-  #[structopt(short = "s", long)]
+  #[clap(short = 's', long)]
   pub shorting: bool,
   /// Disable shorting.
-  #[structopt(short = "S", long, conflicts_with("shorting"))]
+  #[clap(short = 'S', long, conflicts_with("shorting"))]
   pub no_shorting: bool,
 }
 
 
 /// An enumeration representing the `asset` command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Asset {
   /// Query information about a specific asset.
   Get {
@@ -175,11 +190,11 @@ pub enum Asset {
   },
   /// List all assets.
   List {
-    #[structopt(
+    #[clap(
       short,
       long,
       default_value = asset::Class::UsEquity.as_ref(),
-      possible_values = &[asset::Class::Crypto.as_ref(), asset::Class::UsEquity.as_ref()]
+      possible_values = [asset::Class::Crypto.as_ref(), asset::Class::UsEquity.as_ref()]
     )]
     class: AssetClass,
   },
@@ -226,7 +241,7 @@ fn parse_date_time(s: &str) -> Result<NaiveDateTime, String> {
 
 
 /// An enumeration representing the `bars` command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Bars {
   /// Retrieve historical aggregate bars for a symbol.
   Get {
@@ -235,17 +250,17 @@ pub enum Bars {
     /// The aggregation time frame.
     time_frame: TimeFrame,
     /// The start time for which to retrieve bars.
-    #[structopt(parse(try_from_str = parse_date_time))]
+    #[clap(parse(try_from_str = parse_date_time))]
     start: NaiveDateTime,
     /// The end time for which to retrieve bars.
-    #[structopt(parse(try_from_str = parse_date_time))]
+    #[clap(parse(try_from_str = parse_date_time))]
     end: NaiveDateTime,
   },
 }
 
 
 /// A enumeration of all supported realtime market data sources.
-#[derive(Copy, Clone, Debug, StructOpt)]
+#[derive(Copy, Clone, Debug, Subcommand)]
 pub enum DataSource {
   /// Use the Investors Exchange (IEX) as the data source.
   Iex,
@@ -273,7 +288,7 @@ impl FromStr for DataSource {
 
 
 /// A struct representing the `updates` command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Updates {
   /// Subscribe to trade events.
   Trades,
@@ -282,20 +297,20 @@ pub enum Updates {
     /// The symbols for which to receive aggregate data.
     symbols: Vec<String>,
     /// The data source to use.
-    #[structopt(long, default_value = "iex")]
+    #[clap(long, default_value = "iex")]
     source: DataSource,
   },
 }
 
 
 /// An enumeration representing the `order` command.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Order {
   /// Submit an order.
-  #[structopt(group = ArgGroup::with_name("amount").required(true))]
+  #[clap(group = ArgGroup::new("amount").required(true))]
   Submit(SubmitOrder),
   /// Change an order.
-  #[structopt(group = ArgGroup::with_name("amount"))]
+  #[clap(group = ArgGroup::new("amount"))]
   Change(ChangeOrder),
   /// Cancel a single order (by id) or all open ones (via 'all').
   Cancel { cancel: CancelOrder },
@@ -307,75 +322,75 @@ pub enum Order {
   /// List orders.
   List {
     /// Show only closed orders instead of open ones.
-    #[structopt(short = "c", long)]
+    #[clap(short = 'c', long)]
     closed: bool,
   },
 }
 
 
 /// A type representing the options to submit an order.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, ClapArgs)]
 pub struct SubmitOrder {
   /// The side of the order.
   pub side: Side,
   /// The symbol of the asset involved in the order.
   pub symbol: String,
   /// The quantity to trade.
-  #[structopt(long, group = "amount")]
+  #[clap(long, group = "amount")]
   pub quantity: Option<Num>,
   /// The value to trade.
-  #[structopt(long, group = "amount")]
+  #[clap(long, group = "amount")]
   pub value: Option<Num>,
   /// Create a limit order (or stop limit order) with the given limit price.
-  #[structopt(short = "l", long)]
+  #[clap(short = 'l', long)]
   pub limit_price: Option<Num>,
   /// Create a stop order (or stop limit order) with the given stop price.
-  #[structopt(short = "s", long)]
+  #[clap(short = 's', long)]
   pub stop_price: Option<Num>,
   /// Create a one-triggers-other or bracket order with the given
   /// take-profit price.
-  #[structopt(long)]
+  #[clap(long)]
   pub take_profit_price: Option<Num>,
   /// Create a one-triggers-other or bracket order with the given
   /// stop-price under the stop-loss advanced order leg.
-  #[structopt(long)]
+  #[clap(long)]
   pub stop_loss_stop_price: Option<Num>,
   /// Create a one-triggers-other or bracket order with the given
   /// limit-price under the stop-loss advanced order leg. Note that this
   /// option can only be used in conjunction with stop-loss-stop-price.
-  #[structopt(long)]
+  #[clap(long)]
   pub stop_loss_limit_price: Option<Num>,
   /// Create an order that is eligible to execute during
   /// pre-market/after hours. Note that only limit orders that are
   /// valid for the day are supported.
-  #[structopt(long)]
+  #[clap(long)]
   pub extended_hours: bool,
   /// When/for how long the order is valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
-  #[structopt(short = "t", long, default_value = "canceled")]
+  #[clap(short = 't', long, default_value = "canceled")]
   pub time_in_force: TimeInForce,
 }
 
 /// A type representing the options to change an order.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, ClapArgs)]
 pub struct ChangeOrder {
   /// The ID of the order to change.
   pub id: OrderId,
   /// The quantity to trade.
-  #[structopt(long, group = "amount")]
+  #[clap(long, group = "amount")]
   pub quantity: Option<Num>,
   /// The value to trade.
-  #[structopt(long, group = "amount")]
+  #[clap(long, group = "amount")]
   pub value: Option<Num>,
   /// Create a limit order (or stop limit order) with the given limit price.
-  #[structopt(short = "l", long)]
+  #[clap(short = 'l', long)]
   pub limit_price: Option<Num>,
   /// Create a stop order (or stop limit order) with the given stop price.
-  #[structopt(short = "s", long)]
+  #[clap(short = 's', long)]
   pub stop_price: Option<Num>,
   /// When/for how long the order is valid ('today', 'canceled',
   /// 'market-open', or 'market-close').
-  #[structopt(short = "t", long)]
+  #[clap(short = 't', long)]
   pub time_in_force: Option<TimeInForce>,
 }
 
@@ -402,7 +417,7 @@ impl FromStr for CancelOrder {
 }
 
 
-#[derive(Debug, StructOpt)]
+#[derive(Clone, Debug, ArgEnum)]
 pub enum Side {
   /// Buy an asset.
   Buy,
@@ -438,7 +453,7 @@ impl FromStr for OrderId {
 }
 
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 pub enum Position {
   /// Inquire information about the position holding a specific symbol.
   Get {

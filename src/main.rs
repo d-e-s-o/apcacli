@@ -48,6 +48,8 @@ use chrono::TimeZone;
 use chrono::Timelike as _;
 use chrono_tz::America::New_York;
 
+use clap::Parser as _;
+
 use futures::future::join;
 use futures::future::ready;
 use futures::future::FutureExt as _;
@@ -59,8 +61,6 @@ use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
 
 use num_decimal::Num;
-
-use structopt::StructOpt;
 
 use tokio::runtime::Builder;
 
@@ -1649,7 +1649,7 @@ async fn position_list(client: Client) -> Result<()> {
 }
 
 async fn run() -> Result<()> {
-  let args = Args::from_args();
+  let args = Args::parse();
   let level = match args.verbosity {
     0 => LevelFilter::WARN,
     1 => LevelFilter::INFO,
