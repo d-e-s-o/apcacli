@@ -24,10 +24,7 @@ use uuid::Uuid;
 
 /// A command line client for automated trading with Alpaca.
 #[derive(Debug, Parser)]
-#[clap(name = "apcacli")]
-#[clap(author = "Daniel Mueller <deso@posteo.net>")]
 #[clap(version = env!("VERSION"))]
-#[clap(about = "A command line tool for trading stocks on Alpaca (alpaca.markets).", long_about = None)]
 pub struct Args {
   #[clap(subcommand)]
   pub command: Command,
