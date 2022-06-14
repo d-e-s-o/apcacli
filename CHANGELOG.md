@@ -3,6 +3,7 @@ Unreleased
 - Added support for submission of more kinds of bracket orders
 - Migrated over to using `clap` v3 for argument parsing
   - Removed `structopt` dependency
+- Bumped `apca` dependency to `0.25.0`
 
 
 0.1.5

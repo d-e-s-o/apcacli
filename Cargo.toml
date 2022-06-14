@@ -36,7 +36,7 @@ required-features = ["clap_complete"]
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 
 [dependencies]
-apca = "0.24.0"
+apca = "0.25.0"
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4", default-features = false}
 chrono-tz = {version = "0.6.1", default-features = false, features = ["std"]}
@@ -48,5 +48,5 @@ serde_json = {version = "1.0", default-features = false}
 tokio = {version = "1.0", default-features = false, features = ["rt"]}
 tracing = {version = "0.1", default-features = false, features = ["std"]}
 tracing-subscriber = {version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt"]}
-uuid = {version = "0.8", features = ["v4"]}
+uuid = {version = "1.0", features = ["v4"]}
 yansi = {version = "0.5", default-features = false}

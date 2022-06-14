@@ -163,7 +163,7 @@ async fn account_get(client: Client) -> Result<()> {
   trading blocked:    {trading_blocked}
   transfers blocked:  {transfers_blocked}
   account blocked:    {account_blocked}"#,
-    id = account.id.to_hyphenated_ref(),
+    id = account.id.as_hyphenated(),
     status = format_account_status(account.status),
     buying_power = format_price(&account.buying_power, &account.currency),
     cash = format_price(&account.cash, &account.currency),
@@ -412,7 +412,7 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<()> {
   shortable:       {shortable}
   easy-to-borrow:  {easy_to_borrow}"#,
     sym = asset.symbol,
-    id = asset.id.to_hyphenated_ref(),
+    id = asset.id.as_hyphenated(),
     cls = asset.class.as_ref(),
     exchg = asset.exchange.as_ref(),
     status = asset.status.as_ref(),
@@ -446,7 +446,7 @@ async fn asset_list(client: Client, class: AssetClass) -> Result<()> {
       "{sym:<sym_width$} {id}",
       sym = asset.symbol,
       sym_width = sym_max,
-      id = asset.id.to_hyphenated_ref(),
+      id = asset.id.as_hyphenated(),
     );
   }
   Ok(())
@@ -665,7 +665,7 @@ async fn stream_trade_updates(client: Client) -> Result<()> {
 "#,
         symbol = update.order.symbol,
         status = format_trade_status(update.event),
-        id = update.order.id.to_hyphenated_ref(),
+        id = update.order.id.as_hyphenated(),
         order_status = format_order_status(update.order.status),
         type_ = format_order_type(update.order.type_),
         side = format_order_side(update.order.side),
@@ -923,9 +923,9 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
     .await
     .with_context(|| "failed to submit order")?;
 
-  println!("{}", order.id.to_hyphenated_ref());
+  println!("{}", order.id.as_hyphenated());
   for leg in order.legs {
-    println!("  {}", leg.id.to_hyphenated_ref());
+    println!("  {}", leg.id.as_hyphenated());
   }
   Ok(())
 }
@@ -945,7 +945,7 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
   let mut order = client
     .issue::<order::Get>(&id.0)
     .await
-    .with_context(|| format!("failed to retrieve order {}", id.0.to_hyphenated_ref()))?;
+    .with_context(|| format!("failed to retrieve order {}", id.0.as_hyphenated()))?;
 
   let time_in_force = time_in_force
     .map(|x| x.to_time_in_force())
@@ -989,9 +989,9 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
   let order = client
     .issue::<order::Patch>(&(id.0, request))
     .await
-    .with_context(|| format!("failed to change order {}", id.0.to_hyphenated_ref()))?;
+    .with_context(|| format!("failed to change order {}", id.0.as_hyphenated()))?;
 
-  println!("{}", order.id.to_hyphenated_ref());
+  println!("{}", order.id.as_hyphenated());
   Ok(())
 }
 
@@ -1012,6 +1012,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
         // No need to retrieve nested orders here, they should be
         // canceled automatically when the "parent" is canceled.
         nested: false,
+        ..Default::default()
       };
       let orders = client
         .issue::<orders::Get>(&request)
@@ -1023,7 +1024,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
         .map(|order| {
           let id = order.id;
           client.issue::<order::Delete>(&id).map_err(move |e| {
-            let id = order.id.to_hyphenated_ref();
+            let id = order.id.as_hyphenated();
             Error::new(e).context(format!("failed to cancel order {}", id))
           })
         })
@@ -1049,7 +1050,7 @@ async fn order_get(client: Client, id: OrderId) -> Result<()> {
   let legs = order
     .legs
     .into_iter()
-    .map(|order| order.id.to_hyphenated_ref().to_string())
+    .map(|order| order.id.as_hyphenated().to_string())
     .collect::<Vec<_>>()
     .join(",");
 
@@ -1073,7 +1074,7 @@ async fn order_get(client: Client, id: OrderId) -> Result<()> {
   extended hours:   {extended_hours}
   legs:             {legs}"#,
     sym = order.symbol,
-    id = order.id.to_hyphenated_ref(),
+    id = order.id.as_hyphenated(),
     status = format_order_status(order.status),
     created = format_local_time(order.created_at),
     submitted = order
@@ -1168,7 +1169,7 @@ fn order_print(
     "[{tif}] {indent}{id} {side:>side_width$} {qty:>qty_width$} {sym:<sym_width$} {summary}",
     tif = time_in_force,
     indent = indent,
-    id = order.id.to_hyphenated_ref(),
+    id = order.id.as_hyphenated(),
     side_width = side_max,
     side = format_order_side(order.side),
     qty_width = qty_max,
@@ -1216,7 +1217,7 @@ fn order_quantity<'client>(
           .with_context(|| {
             format!(
               "failed to estimate quantity for order {}",
-              id.to_hyphenated_ref()
+              id.as_hyphenated()
             )
           })
       },
@@ -1234,6 +1235,7 @@ async fn order_list(client: Client, closed: bool) -> Result<()> {
     },
     limit: Some(500),
     nested: true,
+    ..Default::default()
   };
 
   let currency = client.issue::<account::Get>(&());
@@ -1330,7 +1332,7 @@ async fn position_get(client: Client, symbol: Symbol) -> Result<()> {
   current price:          {current_price}
   last price:             {last_price}"#,
     sym = position.symbol,
-    id = position.asset_id.to_hyphenated_ref(),
+    id = position.asset_id.as_hyphenated(),
     exchg = position.exchange.as_ref(),
     entry = format_price(&position.average_entry_price, &currency),
     qty = position.quantity,
@@ -1371,7 +1373,7 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
   limit:            {limit}
   stop:             {stop}"#,
     sym = order.symbol,
-    id = order.id.to_hyphenated_ref(),
+    id = order.id.as_hyphenated(),
     status = format_order_status(order.status),
     amount_type = format_amount_type(&order.amount).to_string() + ":",
     amount = format_amount(&order.amount, &currency),
