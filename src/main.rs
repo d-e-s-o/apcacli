@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
-#![allow(clippy::large_enum_variant, clippy::let_and_return)]
+#![allow(
+  clippy::large_enum_variant,
+  clippy::let_and_return,
+  clippy::let_unit_value
+)]
 
 mod args;
 
@@ -244,7 +248,7 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
 
 /// Sort a vector of `Activity` objects in descending order of their
 /// time stamps.
-fn sort_account_activity(activities: &mut Vec<account_activities::Activity>) {
+fn sort_account_activity(activities: &mut [account_activities::Activity]) {
   activities.sort_by(|act1, act2| {
     let ordering = match act1 {
       account_activities::Activity::Trade(trade1) => match act2 {

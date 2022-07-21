@@ -1,0 +1,60 @@
+# Copyright (C) 2022 Daniel Mueller <deso@posteo.net>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: CI
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Build without debug information enabled to decrease compilation time
+  # and binary sizes in CI. This option is assumed to only have marginal
+  # effects on the generated code, likely only in terms of section
+  # arrangement. See
+  # https://doc.rust-lang.org/cargo/reference/environment-variables.html
+  # https://doc.rust-lang.org/rustc/codegen-options/index.html#debuginfo
+  RUSTFLAGS: '-C debuginfo=0'
+
+jobs:
+  test:
+    name: Build and test [${{ matrix.rust }}, ${{ matrix.profile }}]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [1.57.0, stable]
+        profile: [dev, release]
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        profile: minimal
+        override: true
+    - name: Build & test ${{ matrix.profile }}
+      run: |
+        cargo build --profile=${{ matrix.profile }} --bins
+        cargo test --profile=${{ matrix.profile }}
+  clippy:
+    name: Lint with clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy
+          override: true
+      - run: cargo clippy --no-deps --all-targets --all-features --tests -- -A unknown_lints -A deprecated -D warnings
+  rustfmt:
+    name: Check code formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt
+          override: true
+      - run: cargo +nightly fmt -- --check

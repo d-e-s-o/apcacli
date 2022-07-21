@@ -1,4 +1,4 @@
-[![pipeline](https://gitlab.com/d-e-s-o/apcacli/badges/main/pipeline.svg)](https://gitlab.com/d-e-s-o/apcacli/commits/main)
+[![pipeline](https://github.com/d-e-s-o/apcacli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/d-e-s-o/apcacli/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/apcacli.svg)](https://crates.io/crates/apcacli)
 [![rustc](https://img.shields.io/badge/rustc-1.57+-blue.svg)](https://blog.rust-lang.org/2021/12/02/Rust-1.57.0.html)
 
