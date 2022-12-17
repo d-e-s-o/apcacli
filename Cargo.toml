@@ -35,6 +35,7 @@ required-features = ["clap_complete"]
 
 [build-dependencies]
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
+grev = {version = "0.1"}
 
 [dependencies]
 apca = "0.25.0"
