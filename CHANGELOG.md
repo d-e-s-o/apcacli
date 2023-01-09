@@ -4,7 +4,7 @@ Unreleased
 - Migrated over to using `clap` v3 for argument parsing
   - Removed `structopt` dependency
 - Switched to using GitHub Actions as CI provider
-- Bumped minimum supported Rust version to `1.57`
+- Bumped minimum supported Rust version to `1.60`
 - Bumped `apca` dependency to `0.25.0`
 - Bumped `chrono-tz` dependency to `0.8.1`
 
