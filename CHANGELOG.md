@@ -6,6 +6,7 @@ Unreleased
 - Switched to using GitHub Actions as CI provider
 - Bumped minimum supported Rust version to `1.57`
 - Bumped `apca` dependency to `0.25.0`
+- Bumped `chrono-tz` dependency to `0.8.1`
 
 
 0.1.5
