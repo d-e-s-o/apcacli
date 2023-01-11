@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2022 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2023 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::fmt::Debug;
@@ -234,8 +234,12 @@ fn parse_date_time(s: &str) -> Result<NaiveDateTime, String> {
   match NaiveDateTime::from_str(s) {
     Ok(date_time) => Ok(date_time),
     Err(_) => NaiveDate::from_str(s)
-      .map(|date| date.and_hms(0, 0, 0))
-      .map_err(|err| err.to_string()),
+      .map_err(|err| err.to_string())
+      .and_then(|date| {
+        date
+          .and_hms_opt(0, 0, 0)
+          .ok_or_else(|| format!("failed to parse date time string: '{s}'"))
+      }),
   }
 }
 

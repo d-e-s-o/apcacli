@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2019-2023 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
@@ -484,12 +484,28 @@ async fn bars_get(
   };
 
   let start = New_York
-    .ymd(start.year(), start.month(), start.day())
-    .and_hms(start.hour(), start.minute(), start.second())
+    .with_ymd_and_hms(
+      start.year(),
+      start.month(),
+      start.day(),
+      start.hour(),
+      start.minute(),
+      start.second(),
+    )
+    .single()
+    .ok_or_else(|| anyhow!("cannot work with invalid/ambiguous start time"))?
     .with_timezone(&Utc);
   let end = New_York
-    .ymd(end.year(), end.month(), end.day())
-    .and_hms(end.hour(), end.minute(), end.second())
+    .with_ymd_and_hms(
+      end.year(),
+      end.month(),
+      end.day(),
+      end.hour(),
+      end.minute(),
+      end.second(),
+    )
+    .single()
+    .ok_or_else(|| anyhow!("cannot work with invalid/ambiguous end time"))?
     .with_timezone(&Utc);
   let mut request = bars::BarsReqInit {
     adjustment: Some(bars::Adjustment::All),
@@ -557,7 +573,7 @@ fn format_local_time_short(time: DateTime<Utc>) -> Str {
 
 /// Format a date time as a date.
 fn format_date(time: DateTime<Utc>) -> Str {
-  time.date().format("%Y-%m-%d").to_string().into()
+  time.format("%Y-%m-%d").to_string().into()
 }
 
 fn format_trade_status(status: updates::OrderStatus) -> &'static str {
