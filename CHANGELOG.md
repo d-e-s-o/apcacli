@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Bumped `apca` dependency to `0.26.0`
+
+
 0.1.6
 -----
 - Added support for submission of more kinds of bracket orders

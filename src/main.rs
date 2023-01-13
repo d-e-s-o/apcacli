@@ -16,6 +16,7 @@ use std::fmt::Display;
 use std::future::Future;
 use std::io::stdout;
 use std::io::Write;
+use std::mem::take;
 use std::ops::Deref as _;
 use std::process::exit;
 
@@ -31,7 +32,7 @@ use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::api::v2::updates;
 use apca::data::v2::bars;
-use apca::data::v2::last_quote;
+use apca::data::v2::last_quotes;
 use apca::data::v2::stream;
 use apca::ApiInfo;
 use apca::Client;
@@ -810,15 +811,26 @@ async fn value_to_quantity(
   let price = match price {
     Some(price) => price,
     None => {
-      let request = last_quote::LastQuoteReqInit::default().init(symbol);
-      let quote = client
-        .issue::<last_quote::Get>(&request)
+      let request = last_quotes::LastQuotesReqInit::default().init([symbol]);
+      let mut quotes = client
+        .issue::<last_quotes::Get>(&request)
         .await
         .with_context(|| format!("failed to retrieve last quote for {}", symbol))?;
 
+      let quote = match quotes.as_mut_slice() {
+        [(_symbol, quote)] => {
+          debug_assert_eq!(_symbol, symbol);
+          quote
+        },
+        _ => bail!(
+          "received unexpected number of quotes from Alpaca ({})",
+          quotes.len()
+        ),
+      };
+
       let price = match side {
-        order::Side::Buy => quote.ask_price,
-        order::Side::Sell => quote.bid_price,
+        order::Side::Buy => &mut quote.ask_price,
+        order::Side::Sell => &mut quote.bid_price,
       };
 
       ensure!(
@@ -826,7 +838,7 @@ async fn value_to_quantity(
         "most recent quote for {} contains price of zero; unable to estimate quantity",
         symbol
       );
-      price
+      take(price)
     },
   };
 
@@ -967,16 +979,14 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
     .await
     .with_context(|| format!("failed to retrieve order {}", id.0.as_hyphenated()))?;
 
-  let time_in_force = time_in_force
-    .map(|x| x.to_time_in_force())
-    .unwrap_or(order.time_in_force);
+  let time_in_force = time_in_force.map(|x| x.to_time_in_force());
   let limit_price = limit_price.or_else(|| order.limit_price.take());
   let stop_price = stop_price.or_else(|| order.stop_price.take());
 
   let quantity = match (quantity, value) {
     (None, None) => {
       match order.amount {
-        order::Amount::Quantity { quantity } => quantity,
+        order::Amount::Quantity { quantity } => Some(quantity),
         order::Amount::Notional { .. } => {
           // Alpaca's order PATCH logic currently does not seem to
           // support notional orders.
@@ -984,17 +994,22 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
         },
       }
     },
-    (Some(quantity), None) => quantity,
-    (None, Some(value)) => value_to_quantity(
-      &client,
-      &order.symbol,
-      order.side,
-      &value,
-      limit_price.clone(),
-    )
-    .await
-    .with_context(|| "unable to convert value to quantity")?,
-    _ => unreachable!(),
+    (quantity, None) => quantity,
+    (None, Some(value)) => {
+      let quantity = value_to_quantity(
+        &client,
+        &order.symbol,
+        order.side,
+        &value,
+        limit_price.clone(),
+      )
+      .await
+      .with_context(|| "unable to convert value to quantity")?;
+      Some(quantity)
+    },
+    // SANITY: This combination is prevented by `clap` annotations on
+    //         `ChangeOrder`.
+    (Some(_), Some(_)) => unreachable!(),
   };
 
   let request = order::ChangeReqInit {
