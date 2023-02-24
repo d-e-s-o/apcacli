@@ -1,6 +1,8 @@
 Unreleased
 ----------
-- Bumped `apca` dependency to `0.26.0`
+- Introduced `vendored-openssl` feature to build with vendored `openssl`
+  library
+- Bumped `apca` dependency to `0.26.2`
 
 
 0.1.6
