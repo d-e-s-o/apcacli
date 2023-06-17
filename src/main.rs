@@ -642,6 +642,8 @@ fn format_order_side(side: order::Side) -> &'static str {
 fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
   match time_in_force {
     order::TimeInForce::Day => "today",
+    order::TimeInForce::FillOrKill => "fill-or-kill",
+    order::TimeInForce::ImmediateOrCancel => "immediate-or-cancel",
     order::TimeInForce::UntilCanceled => "canceled",
     order::TimeInForce::UntilMarketOpen => "market open",
     order::TimeInForce::UntilMarketClose => "market close",
@@ -652,6 +654,8 @@ fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
 fn format_time_in_force_short(time_in_force: order::TimeInForce) -> &'static str {
   match time_in_force {
     order::TimeInForce::Day => "day",
+    order::TimeInForce::FillOrKill => "fok",
+    order::TimeInForce::ImmediateOrCancel => "ioc",
     order::TimeInForce::UntilCanceled => "gtc",
     order::TimeInForce::UntilMarketOpen => "opn",
     order::TimeInForce::UntilMarketClose => "cls",
