@@ -103,6 +103,10 @@ use crate::args::Updates;
 type Str = Cow<'static, str>;
 
 
+/// The maximum concurrency to use when issuing requests.
+const MAX_CONCURRENCY: usize = 32;
+
+
 // A replacement of the standard println!() macro that does not panic
 // when encountering an EPIPE.
 macro_rules! println {
@@ -1068,7 +1072,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
           })
         })
         .collect::<FuturesUnordered<_>>()
-        .try_for_each(|()| ready(Ok(())))
+        .try_for_each_concurrent(Some(MAX_CONCURRENCY), |()| ready(Ok(())))
         .await
     },
   }
