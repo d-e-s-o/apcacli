@@ -1068,7 +1068,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
           })
         })
         .collect::<FuturesUnordered<_>>()
-        .fold(Ok(()), |acc, res| ready(acc.and(res)))
+        .try_for_each(|()| ready(Ok(())))
         .await
     },
   }
@@ -1295,6 +1295,8 @@ async fn order_list(client: Client, closed: bool) -> Result<()> {
   // Because we reference this quantity multiple times moving forward,
   // we basically cache it here, by pairing it up with the actual order
   // object.
+  // The lint seems to be a false-positive.
+  #[allow(clippy::manual_try_fold)]
   let orders = orders
     .into_iter()
     .map(|order| {
