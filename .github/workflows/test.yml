@@ -1,9 +1,11 @@
 # Copyright (C) 2022-2023 Daniel Mueller <deso@posteo.net>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-name: CI
+name: Test
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
 
 env:
   CARGO_TERM_COLOR: always
