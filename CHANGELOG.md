@@ -2,6 +2,7 @@ Unreleased
 ----------
 - Introduced `vendored-openssl` feature to build with vendored `openssl`
   library
+- Added GitHub Actions workflow for publishing the crate
 - Bumped `apca` dependency to `0.27.0`
 
 
