@@ -12,13 +12,20 @@ mod args;
 
 use std::borrow::Cow;
 use std::cmp::max;
+use std::env::split_paths;
+use std::env::var_os;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fmt::Display;
 use std::future::Future;
 use std::io::stdout;
 use std::io::Write;
 use std::mem::take;
 use std::ops::Deref as _;
+use std::os::unix::process::CommandExt as _;
+use std::path::PathBuf;
 use std::process::exit;
+use std::process::Command as Process;
 
 use apca::api::v2::account;
 use apca::api::v2::account_activities;
@@ -103,7 +110,8 @@ use crate::args::Updates;
 /// The string type we use on many occasions.
 type Str = Cow<'static, str>;
 
-
+/// The prefix for file name of extensions.
+const EXT_PREFIX: &str = "apcacli-";
 /// The maximum concurrency to use when issuing requests.
 const MAX_CONCURRENCY: usize = 32;
 
@@ -1702,6 +1710,57 @@ async fn position_list(client: Client) -> Result<()> {
   Ok(())
 }
 
+/// Resolve an extension provided by name to an actual path.
+///
+/// Extensions are (executable) files that have the "apcacli-" prefix
+/// and are discoverable via the `PATH` environment variable.
+fn resolve_extension(path_var: &OsStr, ext_name: &OsStr) -> Result<PathBuf> {
+  let mut bin_name = OsString::from(EXT_PREFIX);
+  bin_name.push(ext_name);
+
+  for dir in split_paths(path_var) {
+    let mut bin_path = dir.clone();
+    bin_path.push(&bin_name);
+    // Note that we deliberately do not check whether the file we found
+    // is executable. If it is not we will just fail later on with a
+    // permission denied error. The reasons for this behavior are two
+    // fold:
+    // 1) Checking whether a file is executable in Rust is painful (as
+    //    of 1.37 there exists the PermissionsExt trait but it is
+    //    available only for Unix based systems).
+    // 2) It is considered a better user experience to resolve to an
+    //    extension even if it later turned out to be not usable over
+    //    not showing it and silently doing nothing -- mostly because
+    //    anything residing in PATH should be executable anyway and
+    //    given that its name also starts with apcacli- we are pretty
+    //    sure that's a bug on the user's side.
+    if bin_path.is_file() {
+      return Ok(bin_path)
+    }
+  }
+
+  let err = if let Some(name) = bin_name.to_str() {
+    anyhow!("extension {} not found", name)
+  } else {
+    anyhow!("extension not found")
+  };
+  Err(err)
+}
+
+/// Run an extension.
+fn extension(args: Vec<OsString>) -> Result<()> {
+  // Note that while `Command` would actually honor PATH by itself, we
+  // do not want that behavior because it would circumvent the execution
+  // context we use for testing. As such, we need to do our own search.
+  let mut args = args.into_iter();
+  let ext_name = args.next().context("No extension specified")?;
+  let path_var = var_os("PATH").context("PATH variable not present")?;
+  let ext_path = resolve_extension(&path_var, &ext_name)?;
+
+  let mut cmd = Process::new(&ext_path);
+  Err(cmd.exec()).with_context(|| format!("Failed to execute extension {}", ext_path.display()))
+}
+
 async fn run() -> Result<()> {
   let args = Args::parse();
   let level = match args.verbosity {
@@ -1718,18 +1777,23 @@ async fn run() -> Result<()> {
 
   set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
 
-  let api_info =
-    ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
-  let client = Client::new(api_info);
+  if let Command::Extension(command) = args.command {
+    self::extension(command)
+  } else {
+    let api_info =
+      ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
+    let client = Client::new(api_info);
 
-  match args.command {
-    Command::Account(account) => self::account(client, account).await,
-    Command::Asset(asset) => self::asset(client, asset).await,
-    Command::Bars(bars) => self::bars(client, bars).await,
-    Command::Market => self::market(client).await,
-    Command::Order(order) => self::order(client, order).await,
-    Command::Position(position) => self::position(client, position).await,
-    Command::Updates(updates) => self::updates(client, updates).await,
+    match args.command {
+      Command::Account(account) => self::account(client, account).await,
+      Command::Asset(asset) => self::asset(client, asset).await,
+      Command::Bars(bars) => self::bars(client, bars).await,
+      Command::Market => self::market(client).await,
+      Command::Order(order) => self::order(client, order).await,
+      Command::Position(position) => self::position(client, position).await,
+      Command::Updates(updates) => self::updates(client, updates).await,
+      Command::Extension(..) => unreachable!(),
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 // Copyright (C) 2020-2023 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::ffi::OsString;
 use std::fmt::Debug;
 use std::str::FromStr;
 
@@ -57,6 +58,9 @@ pub enum Command {
   /// Subscribe to some update stream.
   #[clap(subcommand)]
   Updates(Updates),
+  /// An extension and its arguments.
+  #[clap(external_subcommand)]
+  Extension(Vec<OsString>),
 }
 
 
