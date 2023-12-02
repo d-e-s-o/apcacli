@@ -12,12 +12,15 @@ mod args;
 
 use std::borrow::Cow;
 use std::cmp::max;
+use std::env::args_os;
 use std::env::split_paths;
 use std::env::var_os;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fmt::Display;
+use std::fs::read_dir;
 use std::future::Future;
+use std::io;
 use std::io::stdout;
 use std::io::Write;
 use std::mem::take;
@@ -1710,10 +1713,47 @@ async fn position_list(client: Client) -> Result<()> {
   Ok(())
 }
 
+/// Find and list all available extensions.
+///
+/// The logic used in this function should use the same criteria as
+/// `resolve_extension`.
+pub(crate) fn discover_extensions(path_var: &OsStr) -> Result<Vec<String>> {
+  let dirs = split_paths(path_var);
+  let mut commands = Vec::new();
+
+  for dir in dirs {
+    match read_dir(&dir) {
+      Ok(entries) => {
+        for entry in entries {
+          let entry = entry?;
+          let path = entry.path();
+          if path.is_file() {
+            let name = entry.file_name();
+            let file = name.to_string_lossy();
+            if file.starts_with(EXT_PREFIX) {
+              let mut file = file.into_owned();
+              file.replace_range(..EXT_PREFIX.len(), "");
+              commands.push(file);
+            }
+          }
+        }
+      },
+      Err(ref err) if err.kind() == io::ErrorKind::NotFound => (),
+      x => x
+        .map(|_| ())
+        .with_context(|| format!("Failed to iterate entries of directory {}", dir.display()))?,
+    }
+  }
+  Ok(commands)
+}
+
 /// Resolve an extension provided by name to an actual path.
 ///
 /// Extensions are (executable) files that have the "apcacli-" prefix
 /// and are discoverable via the `PATH` environment variable.
+///
+/// The logic used in this function should use the same criteria as
+/// `discover_extensions`.
 fn resolve_extension(path_var: &OsStr, ext_name: &OsStr) -> Result<PathBuf> {
   let mut bin_name = OsString::from(EXT_PREFIX);
   bin_name.push(ext_name);
@@ -1762,7 +1802,46 @@ fn extension(args: Vec<OsString>) -> Result<()> {
 }
 
 async fn run() -> Result<()> {
-  let args = Args::parse();
+  let args = match Args::try_parse_from(args_os()) {
+    Ok(args) => args,
+    Err(err) => match err.kind() {
+      clap::ErrorKind::DisplayHelp => {
+        // For the convenience of the user we'd like to list the
+        // available extensions in the help text. At the same time, we
+        // don't want to unconditionally iterate through PATH (which may
+        // contain directories with loads of files that need scanning)
+        // for every command invoked. So we do that listing only if a
+        // help text is actually displayed.
+        let path = var_os("PATH").unwrap_or_default();
+        if let Ok(extensions) = discover_extensions(&path) {
+          let mut clap = Args::clap();
+
+          for name in extensions {
+            // Because of clap's brain dead API, we see no other way
+            // but to leak the string we created here. That's okay,
+            // though, because we exit in a moment anyway.
+            let about = Box::leak(format!("Run the {} extension", name).into_boxed_str());
+            clap = clap.subcommand(
+              clap::Command::new(name)
+                // Use some magic number here that causes all
+                // extensions to be listed after all other
+                // subcommands.
+                .display_order(1000)
+                .about(about as &'static str),
+            );
+          }
+          let () = clap.print_help()?;
+        }
+        return Ok(())
+      },
+      clap::ErrorKind::DisplayVersion => {
+        print!("{}", err);
+        return Ok(())
+      },
+      _ => return Err(err).context("failed to parse program arguments"),
+    },
+  };
+
   let level = match args.verbosity {
     0 => LevelFilter::WARN,
     1 => LevelFilter::INFO,
