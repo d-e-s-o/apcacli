@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Bumped minimum supported Rust version to `1.63`
+
+
 0.1.7
 -----
 - Introduced `vendored-openssl` feature to build with vendored `openssl`
