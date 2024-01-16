@@ -1,6 +1,7 @@
 Unreleased
 ----------
 - Bumped minimum supported Rust version to `1.63`
+- Bumped `apca` dependency to `0.28.0`
 
 
 0.1.7
