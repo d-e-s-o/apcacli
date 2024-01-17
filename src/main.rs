@@ -231,9 +231,9 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
     account_activities::ActivityType::Interest => "interest",
     account_activities::ActivityType::InterestAdjustedNraWithheld
     | account_activities::ActivityType::InterestAdjustedTefraWithheld => "interested adjusted",
-    account_activities::ActivityType::JournalEntry
-    | account_activities::ActivityType::JournalEntryCash
-    | account_activities::ActivityType::JournalEntryStock => unimplemented!(),
+    account_activities::ActivityType::JournalEntry => "credit/debit",
+    account_activities::ActivityType::JournalEntryCash => "cash credit/debit",
+    account_activities::ActivityType::JournalEntryStock => "stock credit/debit",
     account_activities::ActivityType::Acquisition => "acquisition",
     account_activities::ActivityType::NameChange => "name change",
     account_activities::ActivityType::OptionAssignment => "option assigned",

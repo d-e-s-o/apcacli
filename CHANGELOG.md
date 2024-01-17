@@ -1,5 +1,6 @@
 Unreleased
 ----------
+- Added support for "journal entry" type account activities
 - Bumped minimum supported Rust version to `1.63`
 - Bumped `apca` dependency to `0.28.0`
 
