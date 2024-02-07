@@ -79,6 +79,7 @@ use yansi::Paint;
 
 use crate::args::Account;
 use crate::args::Activity;
+use crate::args::ActivityGet;
 use crate::args::Args;
 use crate::args::Asset;
 use crate::args::AssetClass;
@@ -198,7 +199,7 @@ async fn account_get(client: Client) -> Result<()> {
 /// The handler for the 'account activity' command.
 async fn account_activity(client: Client, activity: Activity) -> Result<()> {
   match activity {
-    Activity::Get => account_activity_get(client).await,
+    Activity::Get(get) => account_activity_get(client, get).await,
   }
 }
 
@@ -275,8 +276,14 @@ fn sort_account_activity(activities: &mut [account_activities::Activity]) {
 
 
 /// Retrieve account activity.
-async fn account_activity_get(client: Client) -> Result<()> {
-  let request = account_activities::ActivityReq::default();
+async fn account_activity_get(client: Client, get: ActivityGet) -> Result<()> {
+  let request = account_activities::ActivityReq {
+    after: get
+      .begin
+      .map(|begin| Utc.from_utc_datetime(&begin.and_hms_opt(0, 0, 0).unwrap())),
+    ..Default::default()
+  };
+
   let currency = client.issue::<account::Get>(&());
   let activity = client.issue::<account_activities::Get>(&request);
 

@@ -144,7 +144,15 @@ pub enum Account {
 pub enum Activity {
   /// Retrieve account activity.
   #[clap(arg_enum)]
-  Get,
+  Get(ActivityGet),
+}
+
+#[derive(Debug, ClapArgs)]
+pub struct ActivityGet {
+  /// Only show activities dated at the given date or after (format:
+  /// yyyy-mm-dd).
+  #[clap(short, long)]
+  pub begin: Option<NaiveDate>,
 }
 
 /// An enumeration representing the `account config` sub command.
