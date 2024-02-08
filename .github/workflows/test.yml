@@ -30,11 +30,9 @@ jobs:
         profile: [dev, release]
     steps:
     - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
-        profile: minimal
-        override: true
     - name: Build & test ${{ matrix.profile }}
       run: |
         cargo build --profile=${{ matrix.profile }} --bins
@@ -45,19 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Nightly Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
+        uses: dtolnay/rust-toolchain@nightly
       - run: cargo +nightly -Z minimal-versions update
       - name: Install minimum Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           # Please adjust README and rust-version field in Cargo.toml files when
           # bumping version.
-          toolchain: 1.63.0
-          default: true
+          toolchain: 1.63
       - name: Build
         run: cargo build --features=vendored-openssl --locked
   clippy:
@@ -65,20 +58,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: clippy
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - run: cargo clippy --no-deps --all-targets --all-features --tests -- -A unknown_lints -A deprecated -D warnings
   rustfmt:
     name: Check code formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           components: rustfmt
-          override: true
       - run: cargo +nightly fmt -- --check
