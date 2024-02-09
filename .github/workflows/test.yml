@@ -33,6 +33,9 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ matrix.rust }}-${{ matrix.profile }}
     - name: Build & test ${{ matrix.profile }}
       run: |
         cargo build --profile=${{ matrix.profile }} --bins
@@ -44,6 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Nightly Rust
         uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
       - run: cargo +nightly -Z minimal-versions update
       - name: Install minimum Rust
         uses: dtolnay/rust-toolchain@master
@@ -59,6 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --no-deps --all-targets --all-features --tests -- -A unknown_lints -A deprecated -D warnings
   rustfmt:
     name: Check code formatting
