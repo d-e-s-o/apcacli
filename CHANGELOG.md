@@ -1,5 +1,5 @@
-Unreleased
-----------
+0.1.8
+-----
 - Added support for "journal entry" type account activities
 - Introduced `--begin` argument to `account activity get` subcommand
 - Bumped minimum supported Rust version to `1.63`
