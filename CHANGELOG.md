@@ -1,3 +1,9 @@
+Unreleased
+----------
+- Added support for user provided extensions through lookup via the
+  `PATH` environment variable
+
+
 0.1.8
 -----
 - Added support for "journal entry" type account activities

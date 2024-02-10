@@ -12,13 +12,23 @@ mod args;
 
 use std::borrow::Cow;
 use std::cmp::max;
+use std::collections::BTreeSet;
+use std::env::current_exe;
+use std::env::split_paths;
+use std::env::var_os;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fmt::Display;
 use std::future::Future;
 use std::io::stdout;
 use std::io::Write;
 use std::mem::take;
 use std::ops::Deref as _;
+use std::os::unix::process::CommandExt as _;
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::exit;
+use std::process::Command as Process;
 
 use apca::api::v2::account;
 use apca::api::v2::account_activities;
@@ -103,7 +113,8 @@ use crate::args::Updates;
 /// The string type we use on many occasions.
 type Str = Cow<'static, str>;
 
-
+/// The prefix for file name of extensions.
+const EXT_PREFIX: &str = "apcacli-";
 /// The maximum concurrency to use when issuing requests.
 const MAX_CONCURRENCY: usize = 32;
 
@@ -1702,6 +1713,88 @@ async fn position_list(client: Client) -> Result<()> {
   Ok(())
 }
 
+/// Resolve an extension provided by name to an actual path.
+///
+/// Extensions are (executable) files that have the "apcacli-" prefix
+/// and are discoverable via the `PATH` environment variable.
+fn resolve_extension<D>(dirs: D, ext_name: &OsStr) -> Result<PathBuf>
+where
+  D: IntoIterator<Item = PathBuf>,
+{
+  let mut bin_name = OsString::from(EXT_PREFIX);
+  let () = bin_name.push(ext_name);
+
+  for dir in dirs {
+    let mut bin_path = dir.clone();
+    let () = bin_path.push(&bin_name);
+    // Note that we deliberately do not check whether the file we found
+    // is executable. If it is not we will just fail later on with a
+    // permission denied error. The reasons for this behavior are two
+    // fold:
+    // 1) Checking whether a file is executable in Rust is painful (as
+    //    of 1.37 there exists the PermissionsExt trait but it is
+    //    available only for Unix based systems).
+    // 2) It is considered a better user experience to resolve to an
+    //    extension even if it later turned out to be not usable over
+    //    not showing it and silently doing nothing -- mostly because
+    //    anything residing in PATH should be executable anyway and
+    //    given that its name also starts with apcacli- we are pretty
+    //    sure that's a bug on the user's side.
+    if bin_path.is_file() {
+      return Ok(bin_path)
+    }
+  }
+
+  let err = if let Some(name) = bin_name.to_str() {
+    anyhow!("extension {} not found", name)
+  } else {
+    anyhow!("extension not found")
+  };
+  Err(err)
+}
+
+/// Find all the directories in which to look for extensions.
+fn extension_dirs(exe: &Path) -> impl IntoIterator<Item = PathBuf> {
+  let path_var = var_os("PATH").unwrap_or_default();
+  // We always add the binary's directory into the search path. That
+  // makes it easy to work with in-tree extensions, for example, which
+  // now just have to be built in order to be discoverable.
+  let dirs = split_paths(&path_var)
+    .chain(exe.parent().map(Path::to_path_buf))
+    // Canonicalize and collect into a `BTreeSet` here to eliminate
+    // duplicates.
+    .filter_map(|dir| {
+      // Note that it's entirely possible that `PATH` contains a
+      // directory that does not exist (in which case canonicalization
+      // will fail). To guard against this and other failures, just
+      // swallow errors here altogether. This duplication is entirely
+      // best-effort.
+      dir.canonicalize().ok()
+    })
+    .collect::<BTreeSet<_>>();
+
+  dirs
+}
+
+/// Run an extension.
+fn extension(args: Vec<OsString>) -> Result<()> {
+  // Note that while `Command` would actually honor PATH by itself, we
+  // do not want to rely on that behavior in order to have the ability
+  // to provide better error messages if a non-executable extension is
+  // found, for example. As such, we do our own search.
+  let mut args = args.into_iter();
+  let ext_name = args.next().context("no extension specified")?;
+  let exe = current_exe().context("failed to determine the path of apcacli executable")?;
+  let dirs = extension_dirs(&exe);
+  let ext_path = resolve_extension(dirs, &ext_name)?;
+
+  let err = Process::new(&ext_path)
+    .args(args)
+    .env("APCACLI", exe)
+    .exec();
+  Err(err).with_context(|| format!("failed to execute extension {}", ext_path.display()))
+}
+
 async fn run() -> Result<()> {
   let args = Args::parse();
   let level = match args.verbosity {
@@ -1718,18 +1811,23 @@ async fn run() -> Result<()> {
 
   set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
 
-  let api_info =
-    ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
-  let client = Client::new(api_info);
+  if let Command::Extension(command) = args.command {
+    self::extension(command)
+  } else {
+    let api_info =
+      ApiInfo::from_env().with_context(|| "failed to retrieve Alpaca environment information")?;
+    let client = Client::new(api_info);
 
-  match args.command {
-    Command::Account(account) => self::account(client, account).await,
-    Command::Asset(asset) => self::asset(client, asset).await,
-    Command::Bars(bars) => self::bars(client, bars).await,
-    Command::Market => self::market(client).await,
-    Command::Order(order) => self::order(client, order).await,
-    Command::Position(position) => self::position(client, position).await,
-    Command::Updates(updates) => self::updates(client, updates).await,
+    match args.command {
+      Command::Account(account) => self::account(client, account).await,
+      Command::Asset(asset) => self::asset(client, asset).await,
+      Command::Bars(bars) => self::bars(client, bars).await,
+      Command::Market => self::market(client).await,
+      Command::Order(order) => self::order(client, order).await,
+      Command::Position(position) => self::position(client, position).await,
+      Command::Updates(updates) => self::updates(client, updates).await,
+      Command::Extension(..) => unreachable!(),
+    }
   }
 }
 
@@ -1759,6 +1857,10 @@ fn main() {
 mod tests {
   use super::*;
 
+  use std::fs::File;
+
+  use tempfile::tempdir;
+
 
   /// Check that the `format_approximate_quantity` function works as expected.
   #[test]
@@ -1772,5 +1874,38 @@ mod tests {
       "~0.04"
     );
     assert_eq!(format_approximate_quantity(&Num::new(4, 100)), "0.04");
+  }
+
+  /// Check that we can resolve the path to an extension properly.
+  #[test]
+  fn resolve_extensions() {
+    let dir1 = tempdir().unwrap();
+    let dir2 = tempdir().unwrap();
+
+    {
+      let ext1_path = dir1.path().join("apcacli-ext1");
+      let ext2_path = dir1.path().join("apcacli-ext2");
+      let ext3_path = dir2.path().join("apcacli-super-1337-extensions111one");
+      let _ext1 = File::create(&ext1_path).unwrap();
+      let _ext2 = File::create(&ext2_path).unwrap();
+      let _ext3 = File::create(&ext3_path).unwrap();
+
+      let dirs = [dir1.path().to_path_buf(), dir2.path().to_path_buf()];
+      assert_eq!(
+        resolve_extension(dirs.clone(), OsStr::new("ext1")).unwrap(),
+        ext1_path
+      );
+      assert_eq!(
+        resolve_extension(dirs.clone(), OsStr::new("ext2")).unwrap(),
+        ext2_path
+      );
+      assert_eq!(
+        resolve_extension(dirs, OsStr::new("super-1337-extensions111one")).unwrap(),
+        ext3_path
+      );
+
+      let err = resolve_extension([], OsStr::new("ext1")).unwrap_err();
+      assert_eq!(err.to_string(), "extension apcacli-ext1 not found");
+    }
   }
 }
