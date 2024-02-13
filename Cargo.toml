@@ -32,6 +32,10 @@ incremental = false
 panic = "abort"
 
 [[bin]]
+name = "apcacli-safeguard"
+path = "ext/safeguard.rs"
+
+[[bin]]
 name = "shell-complete"
 path = "utils/shell-complete.rs"
 required-features = ["clap_complete"]
