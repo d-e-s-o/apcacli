@@ -61,6 +61,9 @@ struct Args {
   /// The apcacli command to use in printed commands.
   #[clap(long)]
   apcacli: Option<OsString>,
+  /// Set the stop price at this many percentage points gained.
+  #[clap(short, long, name = "PERCENT")]
+  stop_percent: Option<usize>,
   /// Increase verbosity (can be supplied multiple times).
   #[clap(short = 'v', long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
@@ -93,7 +96,15 @@ fn evaluate_position(
   let cli = cli.to_string_lossy();
 
   let limit_factor = Num::new(10_000 + LIMIT_ORDER_MARKUP, 10_000);
-  let stop_factor = Num::new(10_000 + STOP_ORDER_MARKUP, 10_000);
+  let stop_factor = Num::new(
+    10_000
+      + args
+        .stop_percent
+        .map(|x| x * 100)
+        .unwrap_or(STOP_ORDER_MARKUP),
+    10_000,
+  );
+
   // TODO: For true penny stocks it may be possible that we end
   //       up with a limit price that is equal to the purchase
   //       price, I guess, because we round to two post-decimal
