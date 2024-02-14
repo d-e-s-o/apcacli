@@ -4,6 +4,7 @@
 #![allow(clippy::let_and_return, clippy::let_unit_value)]
 
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::env::var_os;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -58,6 +59,8 @@ const STOP_ORDER_MARKUP: usize = 100;
 /// stop-loss orders.
 #[derive(Debug, Parser)]
 struct Args {
+  /// Symbols of positions to set/change stop orders for.
+  positions: Vec<String>,
   /// The apcacli command to use in printed commands.
   #[clap(long)]
   apcacli: Option<OsString>,
@@ -202,7 +205,20 @@ fn evaluate_positions_and_orders(
   positions: &[position::Position],
   orders: &[order::Order],
 ) -> Result<()> {
+  let symbols = if !args.positions.is_empty() {
+    Some(args.positions.iter().cloned().collect::<HashSet<_>>())
+  } else {
+    None
+  };
+
   for position in positions {
+    let evaluate = symbols
+      .as_ref()
+      .map_or(true, |symbols| symbols.contains(&position.symbol));
+    if !evaluate {
+      continue
+    }
+
     let span = span!(Level::INFO, "evaluate", symbol = display(&position.symbol));
     let _enter = span.enter();
     let () = evaluate_position(args, position, orders)
