@@ -40,9 +40,6 @@ use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
 
 
-/// The minimum total unrealized gain on a position to consider creating
-/// a stop-loss order.
-const MIN_GAIN_PERCENT: usize = 5;
 /// The minimum markup for the limit price, expressed in basis points
 /// (i.e., 100th of a percent).
 const LIMIT_ORDER_MARKUP: usize = 10;
@@ -67,6 +64,10 @@ struct Args {
   /// creation.
   #[clap(short, long)]
   min_value: Option<usize>,
+  /// The minimum gain a position needs to have for it to be considered
+  /// for stop-loss order creation.
+  #[clap(short = 'g', long, default_value = "5")]
+  min_gain_percent: usize,
   /// Increase verbosity (can be supplied multiple times).
   #[clap(short = 'v', long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
@@ -169,10 +170,10 @@ fn evaluate_position(
       .clone()
       .unwrap_or_default()
       * 100;
-    if total_gain < Num::from(MIN_GAIN_PERCENT) {
+    if total_gain < Num::from(args.min_gain_percent) {
       info!(
         "total gain ({:.2}%) is below {}%",
-        total_gain, MIN_GAIN_PERCENT
+        total_gain, args.min_gain_percent
       );
       return Ok(())
     }
