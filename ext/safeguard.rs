@@ -43,10 +43,6 @@ use tracing_subscriber::FmtSubscriber;
 /// The minimum total unrealized gain on a position to consider creating
 /// a stop-loss order.
 const MIN_GAIN_PERCENT: usize = 5;
-/// The minimum value of a position (including unrealized gains) to
-/// consider creating a stop-loss order.
-const MIN_TOTAL_VALUE: usize = 800;
-
 /// The minimum markup for the limit price, expressed in basis points
 /// (i.e., 100th of a percent).
 const LIMIT_ORDER_MARKUP: usize = 10;
@@ -67,6 +63,10 @@ struct Args {
   /// Set the stop price at this many percentage points gained.
   #[clap(short, long, name = "PERCENT")]
   stop_percent: Option<usize>,
+  /// The minimum value of a position required for stop-loss order
+  /// creation.
+  #[clap(short, long)]
+  min_value: Option<usize>,
   /// Increase verbosity (can be supplied multiple times).
   #[clap(short = 'v', long = "verbose", global = true, parse(from_occurrences))]
   verbosity: usize,
@@ -177,13 +177,15 @@ fn evaluate_position(
       return Ok(())
     }
 
-    let total_value = &position.quantity * position.current_price.clone().unwrap_or_default();
-    if total_value < Num::from(MIN_TOTAL_VALUE) {
-      info!(
-        "total value ({}) is still less than {:.2}",
-        total_value, MIN_TOTAL_VALUE
-      );
-      return Ok(())
+    if let Some(min_value) = args.min_value {
+      let total_value = &position.quantity * position.current_price.clone().unwrap_or_default();
+      if total_value < Num::from(min_value) {
+        info!(
+          "total value ({}) is still less than {:.2}",
+          total_value, min_value
+        );
+        return Ok(())
+      }
     }
 
     println!(
