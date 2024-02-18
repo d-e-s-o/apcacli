@@ -2,6 +2,8 @@ Unreleased
 ----------
 - Added support for user provided extensions through lookup via the
   `PATH` environment variable
+- Added `safeguard` extension for semi-automatic creation of stop-loss
+  orders for open positions
 
 
 0.1.8
