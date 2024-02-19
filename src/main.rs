@@ -66,6 +66,7 @@ use chrono::TimeZone;
 use chrono::Timelike as _;
 use chrono_tz::America::New_York;
 
+use clap::CommandFactory as _;
 use clap::Parser as _;
 
 use futures::future::join;
@@ -95,7 +96,6 @@ use crate::args::Activity;
 use crate::args::ActivityGet;
 use crate::args::Args;
 use crate::args::Asset;
-use crate::args::AssetClass;
 use crate::args::Bars;
 use crate::args::CancelOrder;
 use crate::args::ChangeOrder;
@@ -455,9 +455,9 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<()> {
 }
 
 /// Print all tradeable assets.
-async fn asset_list(client: Client, class: AssetClass) -> Result<()> {
+async fn asset_list(client: Client, class: asset::Class) -> Result<()> {
   let request = assets::AssetsReqInit {
-    class: class.0,
+    class,
     ..Default::default()
   }
   .init();
@@ -1846,7 +1846,8 @@ async fn run() -> Result<()> {
   let args = match Args::try_parse_from(args_os()) {
     Ok(args) => args,
     Err(err) => match err.kind() {
-      clap::ErrorKind::DisplayHelp | clap::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+      clap::error::ErrorKind::DisplayHelp
+      | clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
         // For the convenience of the user we'd like to list the
         // available extensions in the help text. At the same time, we
         // don't want to unconditionally iterate through PATH (which may
@@ -1855,7 +1856,7 @@ async fn run() -> Result<()> {
         // help text is actually displayed.
         let dirs = extension_dirs(&current_exe().unwrap_or_default());
         if let Ok(extensions) = discover_extensions(dirs) {
-          let mut clap = Args::clap();
+          let mut clap = Args::command();
 
           for name in extensions {
             // Because of clap's brain dead API, we see no other way
@@ -1875,7 +1876,7 @@ async fn run() -> Result<()> {
         }
         return Ok(())
       },
-      clap::ErrorKind::DisplayVersion => {
+      clap::error::ErrorKind::DisplayVersion => {
         print!("{}", err);
         return Ok(())
       },

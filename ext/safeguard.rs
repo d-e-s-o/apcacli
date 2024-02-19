@@ -27,6 +27,7 @@ use anyhow::Result;
 
 use num_decimal::Num;
 
+use clap::ArgAction;
 use clap::Parser;
 
 use tokio::runtime::Builder;
@@ -69,8 +70,8 @@ struct Args {
   #[clap(short = 'g', long, default_value = "5")]
   min_gain_percent: usize,
   /// Increase verbosity (can be supplied multiple times).
-  #[clap(short = 'v', long = "verbose", global = true, parse(from_occurrences))]
-  verbosity: usize,
+  #[clap(short = 'v', long = "verbose", global = true, action = ArgAction::Count)]
+  verbosity: u8,
 }
 
 

@@ -1,11 +1,11 @@
-// Copyright (C) 2020-2022 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2023 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(clippy::large_enum_variant, clippy::let_and_return)]
 
 use std::io::stdout;
 
-use clap::IntoApp as _;
+use clap::CommandFactory as _;
 use clap::Parser;
 
 use clap_complete::generate;
@@ -22,7 +22,7 @@ mod apcacli {
 #[derive(Debug, Parser)]
 struct Args {
   /// The shell for which to generate a completion script for.
-  #[clap(arg_enum)]
+  #[clap(value_enum)]
   shell: Shell,
   /// The command for which to generate the shell completion script.
   #[clap(default_value = "apcacli")]

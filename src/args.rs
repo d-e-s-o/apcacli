@@ -11,11 +11,12 @@ use apca::api::v2::order;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 
-use clap::ArgEnum;
+use clap::ArgAction;
 use clap::ArgGroup;
 use clap::Args as ClapArgs;
 use clap::Parser;
 use clap::Subcommand;
+use clap::ValueEnum;
 
 use num_decimal::Num;
 
@@ -30,8 +31,8 @@ pub struct Args {
   #[clap(subcommand)]
   pub command: Command,
   /// Increase verbosity (can be supplied multiple times).
-  #[clap(short = 'v', long = "verbose", global = true, parse(from_occurrences))]
-  pub verbosity: usize,
+  #[clap(short = 'v', long = "verbose", global = true, action = ArgAction::Count)]
+  pub verbosity: u8,
 }
 
 /// A command line tool for trading stocks on Alpaca (alpaca.markets).
@@ -47,7 +48,7 @@ pub enum Command {
   #[clap(subcommand)]
   Bars(Bars),
   /// Retrieve status information about the market.
-  #[clap(arg_enum)]
+  #[clap(value_enum)]
   Market,
   /// Perform various order related functions.
   #[clap(subcommand)]
@@ -65,7 +66,7 @@ pub enum Command {
 
 
 /// An indication when/for how long an order is valid.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TimeInForce {
   Today,
   Canceled,
@@ -114,26 +115,11 @@ impl FromStr for Symbol {
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct AssetClass(pub asset::Class);
-
-impl FromStr for AssetClass {
-  type Err = String;
-
-  fn from_str(class: &str) -> Result<Self, Self::Err> {
-    let class = asset::Class::from_str(class)
-      .map_err(|()| format!("provided asset class '{}' is invalid", class))?;
-
-    Ok(Self(class))
-  }
-}
-
-
 /// An enumeration representing the `account` command.
 #[derive(Debug, Subcommand)]
 pub enum Account {
   /// Query and print information about the account.
-  #[clap(arg_enum)]
+  #[clap(value_enum)]
   Get,
   /// Retrieve account activity.
   #[clap(subcommand)]
@@ -147,7 +133,7 @@ pub enum Account {
 #[derive(Debug, Subcommand)]
 pub enum Activity {
   /// Retrieve account activity.
-  #[clap(arg_enum)]
+  #[clap(value_enum)]
   Get(ActivityGet),
 }
 
@@ -163,7 +149,7 @@ pub struct ActivityGet {
 #[derive(Debug, Subcommand)]
 pub enum Config {
   /// Retrieve the account configuration.
-  #[clap(arg_enum)]
+  #[clap(value_enum)]
   Get,
   /// Modify the account configuration.
   Set(ConfigSet),
@@ -192,6 +178,14 @@ pub struct ConfigSet {
 }
 
 
+fn parse_asset_class(s: &str) -> Result<asset::Class, String> {
+  let class =
+    asset::Class::from_str(s).map_err(|()| format!("provided asset class '{s}' is invalid"))?;
+
+  Ok(class)
+}
+
+
 /// An enumeration representing the `asset` command.
 #[derive(Debug, Subcommand)]
 pub enum Asset {
@@ -206,15 +200,15 @@ pub enum Asset {
       short,
       long,
       default_value = asset::Class::UsEquity.as_ref(),
-      possible_values = [asset::Class::Crypto.as_ref(), asset::Class::UsEquity.as_ref()]
+      value_parser = parse_asset_class,
     )]
-    class: AssetClass,
+    class: asset::Class,
   },
 }
 
 
 /// An indication when/for how long an order is valid.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TimeFrame {
   /// Retrieve historical data aggregated per day.
   Day,
@@ -266,10 +260,10 @@ pub enum Bars {
     /// The aggregation time frame.
     time_frame: TimeFrame,
     /// The start time for which to retrieve bars.
-    #[clap(parse(try_from_str = parse_date_time))]
+    #[clap(value_parser = parse_date_time)]
     start: NaiveDateTime,
     /// The end time for which to retrieve bars.
-    #[clap(parse(try_from_str = parse_date_time))]
+    #[clap(value_parser = parse_date_time)]
     end: NaiveDateTime,
   },
 }
@@ -412,7 +406,7 @@ pub struct ChangeOrder {
 
 
 /// An enumeration of the different options for order cancellation.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum CancelOrder {
   /// Cancel a single order as specified by an `OrderId`.
   ById(OrderId),
@@ -433,7 +427,7 @@ impl FromStr for CancelOrder {
 }
 
 
-#[derive(Clone, Debug, ArgEnum)]
+#[derive(Clone, Debug, ValueEnum)]
 pub enum Side {
   /// Buy an asset.
   Buy,
@@ -457,7 +451,7 @@ impl FromStr for Side {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct OrderId(pub order::Id);
 
 impl FromStr for OrderId {
