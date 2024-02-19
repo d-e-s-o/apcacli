@@ -4,6 +4,7 @@ Unreleased
   `PATH` environment variable
 - Added `safeguard` extension for semi-automatic creation of stop-loss
   orders for open positions
+- Bumped minimum supported Rust version to `1.71`
 
 
 0.1.8
