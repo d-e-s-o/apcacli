@@ -59,15 +59,15 @@ struct Args {
   #[clap(long)]
   apcacli: Option<OsString>,
   /// Set the stop price at this many percentage points gained.
-  #[clap(short, long, name = "PERCENT")]
+  #[clap(short, long, value_name = "PERCENT")]
   stop_percent: Option<usize>,
   /// The minimum value of a position required for stop-loss order
   /// creation.
-  #[clap(short, long)]
+  #[clap(short, long, value_name = "VALUE")]
   min_value: Option<usize>,
   /// The minimum gain a position needs to have for it to be considered
   /// for stop-loss order creation.
-  #[clap(short = 'g', long, default_value = "5")]
+  #[clap(short = 'g', long, value_name = "PERCENT", default_value = "5")]
   min_gain_percent: usize,
   /// Increase verbosity (can be supplied multiple times).
   #[clap(short = 'v', long = "verbose", global = true, action = ArgAction::Count)]
