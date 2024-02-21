@@ -1872,7 +1872,17 @@ async fn run() -> Result<()> {
                 .about(about as &'static str),
             );
           }
-          let () = clap.print_help()?;
+
+          // Note that this path may be invoked on paths that ultimately
+          // do *not* display the program help (but rather that of a
+          // subcommand). As such, just invoking `clap.print_help()`
+          // will *not* do the right thing. Instead, re-parse arguments
+          // here again.
+          // SANITY: We parsed the same program arguments above and
+          //         err'd out. We assume we do the same thing here
+          //         again, as nothing of relevance has changed.
+          let err = clap.try_get_matches_from(args_os()).unwrap_err();
+          print!("{}", err.render().ansi());
         }
         return Ok(())
       },
