@@ -54,7 +54,7 @@ clap_complete = {version = "4.4", optional = true}
 futures = {version = "0.3", default-features = false, features = ["async-await", "std"]}
 num-decimal = {version = "0.2.4", default-features = false, features = ["num-v04"]}
 serde_json = {version = "1.0", default-features = false}
-tokio = {version = "1.0", default-features = false, features = ["rt"]}
+tokio = {version = "1.13", default-features = false, features = ["rt"]}
 tracing = {version = "0.1", default-features = false, features = ["std"]}
 tracing-subscriber = {version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt"]}
 uuid = {version = "1.0", features = ["v4"]}
@@ -65,5 +65,11 @@ tempfile = {version = "3.8"}
 # A set of unused dependencies that we require to force correct minimum versions
 # of transitive dependencies, for cases where our dependencies have incorrect
 # dependency specifications themselves.
+# error[E0277]: the trait bound `Version: From<({integer}, {integer}, {integer})>` is not satisfied
 _rustc_version_unused = { package = "rustc_version", version = "0.2.2" }
+# error[E0308]: mismatched types
 _num_bigint_unused = { package = "num-bigint", version = "0.4.2" }
+# error[E0635]: unknown feature `proc_macro_span_shrink`
+_proc_macro2_unused = { package = "proc-macro2", version = "1.0.60" }
+# error: pasting "RUST_VERSION_OPENSSL_" and "(" does not give a valid preprocessing token
+_openssl_unused = {package = "openssl", version = "0.10.35"}
