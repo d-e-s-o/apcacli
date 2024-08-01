@@ -1,4 +1,4 @@
-// Copyright (C) 2023 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2023-2024 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(clippy::let_and_return, clippy::let_unit_value)]
@@ -254,19 +254,20 @@ async fn run() -> Result<()> {
 
   // TODO: We may want to retrieve orders and positions concurrently.
   let positions = client
-    .issue::<positions::Get>(&())
+    .issue::<positions::List>(&())
     .await
     .with_context(|| "failed to retrieve position information")?;
 
-  let request = orders::OrdersReq {
+  let request = orders::ListReq {
     symbols: Vec::new(),
     status: orders::Status::Open,
     limit: Some(500),
     // It shouldn't be necessary for us to work with nested orders here.
     nested: false,
+    ..Default::default()
   };
   let orders = client
-    .issue::<orders::Get>(&request)
+    .issue::<orders::List>(&request)
     .await
     .with_context(|| "failed to retrieve order information")?;
 

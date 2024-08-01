@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2019-2024 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
@@ -145,7 +145,10 @@ fn format_account_status(status: account::Status) -> String {
     account::Status::ApprovalPending => "approval pending",
     account::Status::Active => "active",
     account::Status::Rejected => "rejected",
-    account::Status::Unknown => "unknown",
+    _ => {
+      warn!("encountered unknown account status: {status:?}");
+      "unknown"
+    },
   }
   .to_string()
 }
@@ -222,11 +225,15 @@ fn format_activity_side(side: account_activities::Side) -> &'static str {
     account_activities::Side::Buy => "buy",
     account_activities::Side::Sell => "sell",
     account_activities::Side::ShortSell => "short sell",
+    _ => {
+      warn!("encountered unknown account activity side: {side:?}");
+      "unknown"
+    },
   }
 }
 
-fn format_activity_type(side: account_activities::ActivityType) -> &'static str {
-  match side {
+fn format_activity_type(type_: account_activities::ActivityType) -> &'static str {
+  match type_ {
     account_activities::ActivityType::Fill => unreachable!(),
     account_activities::ActivityType::Transaction => "transaction",
     account_activities::ActivityType::Miscellaneous => "miscellaneous",
@@ -261,7 +268,10 @@ fn format_activity_type(side: account_activities::ActivityType) -> &'static str 
     account_activities::ActivityType::StockSpinoff => "stock spin-off",
     account_activities::ActivityType::StockSplit => "stock split",
     account_activities::ActivityType::Fee => "regulatory fee",
-    account_activities::ActivityType::Unknown => unreachable!(),
+    _ => {
+      warn!("encountered unknown account activity type: {type_:?}");
+      "unknown"
+    },
   }
 }
 
@@ -349,6 +359,10 @@ fn format_trade_confirmation(confirmation: account_config::TradeConfirmation) ->
   match confirmation {
     account_config::TradeConfirmation::Email => "e-mail",
     account_config::TradeConfirmation::None => "none",
+    _ => {
+      warn!("encountered unknown trade confirmation setting: {confirmation:?}");
+      "unknown"
+    },
   }
 }
 
@@ -409,9 +423,9 @@ async fn account_config_set(client: Client, set: ConfigSet) -> Result<()> {
   };
 
   let _ = client
-    .issue::<account_config::Patch>(&config)
+    .issue::<account_config::Change>(&config)
     .await
-    .with_context(|| "failed to update account configuration")?;
+    .with_context(|| "failed to change account configuration")?;
   Ok(())
 }
 
@@ -456,14 +470,13 @@ async fn asset_get(client: Client, symbol: Symbol) -> Result<()> {
 
 /// Print all tradeable assets.
 async fn asset_list(client: Client, class: asset::Class) -> Result<()> {
-  let request = assets::AssetsReqInit {
+  let request = assets::ListReq {
     class,
     ..Default::default()
-  }
-  .init();
+  };
 
   let mut assets = client
-    .issue::<assets::Get>(&request)
+    .issue::<assets::List>(&request)
     .await
     .with_context(|| "failed to retrieve asset list")?;
 
@@ -533,19 +546,22 @@ async fn bars_get(
     .single()
     .ok_or_else(|| anyhow!("cannot work with invalid/ambiguous end time"))?
     .with_timezone(&Utc);
-  let mut request = bars::BarsReqInit {
+  let mut request = bars::ListReqInit {
     adjustment: Some(bars::Adjustment::All),
     ..Default::default()
   }
   .init(symbol.clone(), start, end, time_frame);
 
   loop {
-    let response = client.issue::<bars::Get>(&request).await.with_context(|| {
-      format!(
-        "failed to retrieve historical aggregate bars for {}",
-        symbol
-      )
-    })?;
+    let response = client
+      .issue::<bars::List>(&request)
+      .await
+      .with_context(|| {
+        format!(
+          "failed to retrieve historical aggregate bars for {}",
+          symbol
+        )
+      })?;
     for bar in response.bars {
       let time = New_York.from_utc_datetime(&bar.time.naive_utc());
       println!(
@@ -620,7 +636,10 @@ fn format_trade_status(status: updates::OrderStatus) -> &'static str {
     updates::OrderStatus::PendingNew => "pending new",
     updates::OrderStatus::PendingReplace => "pending replace",
     updates::OrderStatus::Calculated => "calculated",
-    updates::OrderStatus::Unknown => "unknown",
+    _ => {
+      warn!("encountered unknown order status: {status:?}");
+      "unknown"
+    },
   }
 }
 
@@ -643,7 +662,10 @@ fn format_order_status(status: order::Status) -> &'static str {
     order::Status::Suspended => "suspended",
     order::Status::Calculated => "calculated",
     order::Status::Held => "held",
-    order::Status::Unknown => "unknown",
+    _ => {
+      warn!("encountered unknown order status: {status:?}");
+      "unknown"
+    },
   }
 }
 
@@ -654,6 +676,10 @@ fn format_order_type(type_: order::Type) -> &'static str {
     order::Type::Stop => "stop",
     order::Type::StopLimit => "stop-limit",
     order::Type::TrailingStop => "trailing-stop",
+    _ => {
+      warn!("encountered unknown order type: {type_:?}");
+      "unknown"
+    },
   }
 }
 
@@ -672,6 +698,10 @@ fn format_time_in_force(time_in_force: order::TimeInForce) -> &'static str {
     order::TimeInForce::UntilCanceled => "canceled",
     order::TimeInForce::UntilMarketOpen => "market open",
     order::TimeInForce::UntilMarketClose => "market close",
+    _ => {
+      warn!("encountered unknown time-in-force: {time_in_force:?}");
+      "unknown"
+    },
   }
 }
 
@@ -684,6 +714,10 @@ fn format_time_in_force_short(time_in_force: order::TimeInForce) -> &'static str
     order::TimeInForce::UntilCanceled => "gtc",
     order::TimeInForce::UntilMarketOpen => "opn",
     order::TimeInForce::UntilMarketClose => "cls",
+    _ => {
+      warn!("encountered unknown time-in-force: {time_in_force:?}");
+      "unknwn"
+    },
   }
 }
 
@@ -840,7 +874,7 @@ async fn value_to_quantity(
   let price = match price {
     Some(price) => price,
     None => {
-      let request = last_quotes::LastQuotesReqInit::default().init([symbol]);
+      let request = last_quotes::GetReqInit::default().init([symbol]);
       let mut quotes = client
         .issue::<last_quotes::Get>(&request)
         .await
@@ -966,7 +1000,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
 
   // TODO: We should probably support other forms of specifying
   //       the symbol.
-  let request = order::OrderReqInit {
+  let request = order::CreateReqInit {
     class,
     type_,
     time_in_force,
@@ -980,7 +1014,7 @@ async fn order_submit(client: Client, submit: SubmitOrder) -> Result<()> {
   .init(symbol, side, order::Amount::quantity(quantity));
 
   let order = client
-    .issue::<order::Post>(&request)
+    .issue::<order::Create>(&request)
     .await
     .with_context(|| "failed to submit order")?;
 
@@ -1041,17 +1075,16 @@ async fn order_change(client: Client, change: ChangeOrder) -> Result<()> {
     (Some(_), Some(_)) => unreachable!(),
   };
 
-  let request = order::ChangeReqInit {
+  let request = order::ChangeReq {
     quantity,
     time_in_force,
     limit_price,
     stop_price,
     ..Default::default()
-  }
-  .init();
+  };
 
   let order = client
-    .issue::<order::Patch>(&(id.0, request))
+    .issue::<order::Change>(&(id.0, request))
     .await
     .with_context(|| format!("failed to change order {}", id.0.as_hyphenated()))?;
 
@@ -1070,7 +1103,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
     CancelOrder::All => {
       // TODO: This isn't quite sufficient if there are more than 500
       //       open orders (unlikely but possible).
-      let request = orders::OrdersReq {
+      let request = orders::ListReq {
         status: orders::Status::Open,
         limit: Some(500),
         // No need to retrieve nested orders here, they should be
@@ -1079,7 +1112,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
         ..Default::default()
       };
       let orders = client
-        .issue::<orders::Get>(&request)
+        .issue::<orders::List>(&request)
         .await
         .with_context(|| "failed to list orders")?;
 
@@ -1291,7 +1324,7 @@ fn order_quantity<'client>(
 
 /// List all currently open orders.
 async fn order_list(client: Client, closed: bool) -> Result<()> {
-  let request = orders::OrdersReq {
+  let request = orders::ListReq {
     status: if closed {
       orders::Status::Closed
     } else {
@@ -1303,7 +1336,7 @@ async fn order_list(client: Client, closed: bool) -> Result<()> {
   };
 
   let currency = client.issue::<account::Get>(&());
-  let orders = client.issue::<orders::Get>(&request);
+  let orders = client.issue::<orders::List>(&request);
 
   let (currency, orders) = join!(currency, orders);
   let currency = currency
@@ -1703,7 +1736,7 @@ fn position_print(positions: &[position::Position], currency: &str) {
 /// List all currently open positions.
 async fn position_list(client: Client) -> Result<()> {
   let account = client.issue::<account::Get>(&());
-  let positions = client.issue::<positions::Get>(&());
+  let positions = client.issue::<positions::List>(&());
 
   let (account, positions) = join!(account, positions);
   let account = account.with_context(|| "failed to retrieve account information")?;
