@@ -44,6 +44,8 @@ use apca::api::v2::orders;
 use apca::api::v2::position;
 use apca::api::v2::positions;
 use apca::api::v2::updates;
+use apca::api::v2::watchlist;
+use apca::api::v2::watchlists;
 use apca::data::v2::bars;
 use apca::data::v2::last_quotes;
 use apca::data::v2::stream;
@@ -102,6 +104,7 @@ use crate::args::ChangeOrder;
 use crate::args::Command;
 use crate::args::Config;
 use crate::args::ConfigSet;
+use crate::args::CreateWatchlist;
 use crate::args::DataSource;
 use crate::args::Order;
 use crate::args::OrderId;
@@ -110,7 +113,10 @@ use crate::args::Side;
 use crate::args::SubmitOrder;
 use crate::args::Symbol;
 use crate::args::TimeFrame;
+use crate::args::UpdateWatchlist;
 use crate::args::Updates;
+use crate::args::Watchlist;
+use crate::args::WatchlistId;
 
 
 /// The string type we use on many occasions.
@@ -486,7 +492,7 @@ async fn asset_list(client: Client, class: asset::Class) -> Result<()> {
 
   for asset in assets.into_iter().filter(|asset| asset.tradable) {
     println!(
-      "{sym:<sym_width$} {id}",
+      "{sym:<sym_width$}  {id}",
       sym = asset.symbol,
       sym_width = sym_max,
       id = asset.id.as_hyphenated(),
@@ -1749,6 +1755,173 @@ async fn position_list(client: Client) -> Result<()> {
   Ok(())
 }
 
+
+/// Create a new watch list with the given name.
+async fn watchlist_create(client: Client, create: CreateWatchlist) -> Result<()> {
+  let CreateWatchlist { name, symbols } = create;
+  let request = watchlist::CreateReqInit {
+    symbols,
+    ..Default::default()
+  }
+  .init(name);
+
+  let watchlist = client
+    .issue::<watchlist::Create>(&request)
+    .await
+    .context("failed to create watch list")?;
+
+  println!("{}", watchlist.id.as_hyphenated());
+  Ok(())
+}
+
+
+/// List all watch lists.
+async fn watchlist_list(client: Client) -> Result<()> {
+  let watchlists = client
+    .issue::<watchlists::Get>(&())
+    .await
+    .context("failed to retrieve watch lists")?;
+
+  let mut lists = Vec::with_capacity(watchlists.len());
+  let () = watchlists
+    .into_iter()
+    .map(|list| {
+      let id = list.id;
+      client.issue::<watchlist::Get>(&id).map_err(move |e| {
+        Error::new(e).context(format!(
+          "failed to retrieve watch list {}",
+          id.as_hyphenated()
+        ))
+      })
+    })
+    .collect::<FuturesUnordered<_>>()
+    .try_for_each_concurrent(Some(MAX_CONCURRENCY), |list| {
+      let () = lists.push(list);
+      ready(Ok(()))
+    })
+    .await?;
+
+  let name_max = max_width(&lists, |l| l.name.len());
+
+  for list in lists {
+    println!(
+      "{name:<name_width$}  {id}",
+      name = list.name,
+      name_width = name_max,
+      id = list.id.as_hyphenated(),
+    );
+  }
+  Ok(())
+}
+
+
+/// Retrieve and print information about a watch list.
+async fn watchlist_get(client: Client, id: WatchlistId) -> Result<()> {
+  let watchlist = client
+    .issue::<watchlist::Get>(&id.0)
+    .await
+    .with_context(|| format!("failed to retrieve watch list `{}`", id.0.as_hyphenated()))?;
+
+  println!(
+    r#"{name}:
+  id:              {id}
+  created at:      {created}
+  updated at:      {updated}
+  symbols:         {symbols}"#,
+    name = watchlist.name,
+    id = watchlist.id.as_hyphenated(),
+    created = format_local_time(watchlist.created_at),
+    updated = format_local_time(watchlist.updated_at),
+    symbols = if watchlist.assets.is_empty() {
+      Cow::Borrowed("N/A")
+    } else {
+      Cow::Owned(
+        watchlist
+          .assets
+          .iter()
+          .map(|asset| asset.symbol.clone())
+          .collect::<Vec<_>>()
+          .join(","),
+      )
+    },
+  );
+  Ok(())
+}
+
+
+/// Update an existing watch list.
+async fn watchlist_update(client: Client, update: UpdateWatchlist) -> Result<()> {
+  let UpdateWatchlist {
+    id,
+    name,
+    add,
+    remove,
+  } = update;
+  let add = add.into_iter().flatten().collect::<Vec<_>>();
+  let remove = remove.into_iter().flatten().collect::<Vec<_>>();
+
+  let watchlist = client
+    .issue::<watchlist::Get>(&id.0)
+    .await
+    .with_context(|| format!("failed to retrieve watch list `{}`", id.0.as_hyphenated()))?;
+
+  // We work with a `Vec` here to preserve ordering. Performance
+  // shouldn't be much of a concern given how short lists are likely to
+  // be.
+  let mut symbols = watchlist
+    .assets
+    .into_iter()
+    .map(|asset| asset.symbol)
+    .collect::<Vec<_>>();
+  for sym in remove {
+    if let Some((idx, _)) = symbols.iter().enumerate().find(|(_idx, s)| *s == &sym) {
+      let _removed = symbols.remove(idx);
+    } else {
+      bail!(
+        "symbol `{sym}` not found in watch list {}",
+        id.0.as_hyphenated()
+      )
+    }
+  }
+  let () = symbols.extend(add);
+
+  let request = watchlist::UpdateReqInit {
+    symbols,
+    ..Default::default()
+  }
+  .init(name.unwrap_or(watchlist.name));
+
+  let _watchlist = client
+    .issue::<watchlist::Update>(&(watchlist.id, request))
+    .await
+    .with_context(|| format!("failed to update watch list {}", id.0.as_hyphenated()))?;
+  Ok(())
+}
+
+
+/// Delete a watch list.
+async fn watchlist_delete(client: Client, id: WatchlistId) -> Result<()> {
+  let () = client
+    .issue::<watchlist::Delete>(&id.0)
+    .await
+    .with_context(|| format!("failed to delete watch list `{}`", id.0.as_hyphenated()))?;
+
+  Ok(())
+}
+
+
+/// The handler for the `watchlist` command.
+async fn watchlist(client: Client, watchlist: Watchlist) -> Result<()> {
+  match watchlist {
+    Watchlist::Create(create) => watchlist_create(client, create).await,
+    Watchlist::List => watchlist_list(client).await,
+    Watchlist::Get { id } => watchlist_get(client, id).await,
+    Watchlist::Update(update) => watchlist_update(client, update).await,
+    Watchlist::Delete { id } => watchlist_delete(client, id).await,
+  }
+}
+
+
 /// Find and list all available extensions.
 ///
 /// The logic used in this function should use the same criteria as
@@ -1956,6 +2129,7 @@ async fn run() -> Result<()> {
       Command::Order(order) => self::order(client, order).await,
       Command::Position(position) => self::position(client, position).await,
       Command::Updates(updates) => self::updates(client, updates).await,
+      Command::Watchlist(watchlist) => self::watchlist(client, watchlist).await,
       Command::Extension(..) => unreachable!(),
     }
   }

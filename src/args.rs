@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2023 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2024 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::ffi::OsString;
@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use apca::api::v2::asset;
 use apca::api::v2::order;
+use apca::api::v2::watchlist;
 
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -59,6 +60,9 @@ pub enum Command {
   /// Subscribe to some update stream.
   #[clap(subcommand)]
   Updates(Updates),
+  /// Manage asset/security watch lists.
+  #[clap(subcommand)]
+  Watchlist(Watchlist),
   /// An extension and its arguments.
   #[clap(external_subcommand)]
   Extension(Vec<OsString>),
@@ -476,5 +480,76 @@ pub enum Position {
   Close {
     /// The position's symbol.
     symbol: Symbol,
+  },
+}
+
+
+/// Parse a comma-separated list of symbols.
+fn parse_symbol_list(s: &str) -> Result<Vec<String>, String> {
+  let symbols = s
+    .split(',')
+    .map(str::trim)
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+  Ok(symbols)
+}
+
+
+#[derive(Clone, Debug)]
+pub struct WatchlistId(pub watchlist::Id);
+
+impl FromStr for WatchlistId {
+  type Err = UuidError;
+
+  fn from_str(id: &str) -> Result<Self, Self::Err> {
+    Ok(WatchlistId(watchlist::Id(Uuid::parse_str(id)?)))
+  }
+}
+
+
+/// A type representing the options to create a watch list.
+#[derive(Debug, ClapArgs)]
+pub struct CreateWatchlist {
+  /// The name of the watch list.
+  pub name: String,
+  /// The list of symbols to put into the newly create watch list.
+  pub symbols: Vec<String>,
+}
+
+
+/// A type representing the options to update a watch list.
+#[derive(Debug, ClapArgs)]
+pub struct UpdateWatchlist {
+  /// The watch list's ID.
+  pub id: WatchlistId,
+  /// The new name of the watch list.
+  #[clap(short, long)]
+  pub name: Option<String>,
+  /// Add the given list of symbols to the watch list.
+  #[clap(short, long, value_parser = parse_symbol_list)]
+  pub add: Vec<Vec<String>>,
+  /// Remove the given list of symbols from the watch list.
+  #[clap(short, long, value_parser = parse_symbol_list)]
+  pub remove: Vec<Vec<String>>,
+}
+
+
+#[derive(Debug, Subcommand)]
+pub enum Watchlist {
+  /// Create a new watch list.
+  Create(CreateWatchlist),
+  /// List all watch lists.
+  List,
+  /// Inquire information about a watch list.
+  Get {
+    /// The watch list's ID.
+    id: WatchlistId,
+  },
+  /// Update an existing watch list.
+  Update(UpdateWatchlist),
+  /// Delete a watch list.
+  Delete {
+    /// The watch list's ID.
+    id: WatchlistId,
   },
 }

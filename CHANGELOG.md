@@ -4,6 +4,7 @@ Unreleased
   `PATH` environment variable
 - Added `safeguard` extension for semi-automatic creation of stop-loss
   orders for open positions
+- Added `watchlist` command for working with asset watch lists
 - Bumped minimum supported Rust version to `1.71`
 - Bumped `apca` dependency to `0.29.0`
 - Bumped `clap` dependency to `4.4.0`
