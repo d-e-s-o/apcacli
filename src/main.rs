@@ -91,7 +91,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::SystemTime;
 use tracing_subscriber::FmtSubscriber;
 
-use yansi::Paint;
+use yansi::Painted;
 
 use crate::args::Account;
 use crate::args::Activity;
@@ -1521,30 +1521,30 @@ fn format_amount(amount: &order::Amount, currency: &str) -> Str {
   }
 }
 
-fn format_colored<F>(value: &Num, format: F) -> Paint<Str>
+fn format_colored<F>(value: &Num, format: F) -> Painted<Str>
 where
   F: Fn(&Num) -> Str,
 {
   if value.is_positive() {
-    Paint::rgb(0x00, 0x70, 0x00, format(value))
+    Painted::new(format(value)).rgb(0x00, 0x70, 0x00)
   } else if value.is_negative() {
-    Paint::red(format(value))
+    Painted::new(format(value)).red()
   } else {
-    Paint::default(format(value))
+    Painted::new(format(value))
   }
 }
 
 /// Format gain.
-fn format_gain(price: &Num, currency: &str) -> Paint<Str> {
+fn format_gain(price: &Num, currency: &str) -> Painted<Str> {
   format_colored(price, |price| format_price(price, currency))
 }
 
 /// Format an optional gain.
-fn format_option_gain(price: &Option<Num>, currency: &str) -> Paint<Str> {
+fn format_option_gain(price: &Option<Num>, currency: &str) -> Painted<Str> {
   price
     .as_ref()
     .map(|price| format_gain(price, currency))
-    .unwrap_or_else(|| Paint::default("N/A".into()))
+    .unwrap_or_else(|| Painted::new("N/A".into()))
 }
 
 
@@ -1563,16 +1563,16 @@ fn format_option_percent(percent: &Option<Num>) -> Str {
 
 
 /// Format percent gain.
-fn format_percent_gain(percent: &Num) -> Paint<Str> {
+fn format_percent_gain(percent: &Num) -> Painted<Str> {
   format_colored(percent, format_percent)
 }
 
 /// Format an optional percent gain.
-fn format_option_percent_gain(percent: &Option<Num>) -> Paint<Str> {
+fn format_option_percent_gain(percent: &Option<Num>) -> Painted<Str> {
   percent
     .as_ref()
     .map(format_percent_gain)
-    .unwrap_or_else(|| Paint::default("N/A".into()))
+    .unwrap_or_else(|| Painted::new("N/A".into()))
 }
 
 

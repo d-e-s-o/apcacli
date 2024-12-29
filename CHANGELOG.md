@@ -1,3 +1,8 @@
+Unreleased
+----------
+- Bumped `yansi` dependency to `1.0`
+
+
 0.1.9
 -----
 - Added support for user provided extensions through lookup via the
