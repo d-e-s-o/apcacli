@@ -27,7 +27,7 @@ jobs:
       - run: |
           CARGO_PROFILE_RELEASE_DEBUG=false CARGO_PROFILE_RELEASE_STRIP=true cargo install --bin=apcacli --features=vendored-openssl --path=. --root=. --target x86_64-unknown-linux-musl
           strip bin/apcacli
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: apcacli
           path: bin/apcacli
