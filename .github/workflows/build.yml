@@ -4,6 +4,13 @@
 name: Build
 
 on:
+  workflow_call:
+    inputs:
+      upload-release:
+        description: 'The release to upload artifacts to, if any'
+        default: ''
+        required: false
+        type: string
   workflow_dispatch:
 
 jobs:
@@ -24,3 +31,10 @@ jobs:
         with:
           name: apcacli
           path: bin/apcacli
+      - if: ${{ inputs.upload-release != '' }}
+        name: Upload release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv bin/apcacli apcacli
+          gh release upload ${{ inputs.upload-release }} apcacli
