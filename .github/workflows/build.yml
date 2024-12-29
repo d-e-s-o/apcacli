@@ -25,7 +25,7 @@ jobs:
         with:
           target: x86_64-unknown-linux-musl
       - run: |
-          cargo install --bin=apcacli --features=vendored-openssl --path=. --root=. --target x86_64-unknown-linux-musl
+          CARGO_PROFILE_RELEASE_DEBUG=false CARGO_PROFILE_RELEASE_STRIP=true cargo install --bin=apcacli --features=vendored-openssl --path=. --root=. --target x86_64-unknown-linux-musl
           strip bin/apcacli
       - uses: actions/upload-artifact@v3
         with:
