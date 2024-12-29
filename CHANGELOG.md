@@ -6,7 +6,7 @@ Unreleased
   orders for open positions
 - Added `watchlist` command for working with asset watch lists
 - Bumped minimum supported Rust version to `1.71`
-- Bumped `apca` dependency to `0.29.0`
+- Bumped `apca` dependency to `0.30.0`
 - Bumped `clap` dependency to `4.4.0`
 
 

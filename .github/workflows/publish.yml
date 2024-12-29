@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Daniel Mueller <deso@posteo.net>
+# Copyright (C) 2023-2024 Daniel Mueller <deso@posteo.net>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 name: Publish
@@ -55,7 +55,7 @@ jobs:
           --request POST \
           --url https://api.github.com/repos/${{ github.repository }}/releases \
           --header "Accept: application/vnd.github+json" \
-          --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"\
+          --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           --header "X-GitHub-Api-Version: 2022-11-28" \
           --data "{
               \"tag_name\":\"v${version}\",

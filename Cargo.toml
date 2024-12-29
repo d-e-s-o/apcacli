@@ -45,7 +45,7 @@ anyhow = {version = "1.0", default-features = false, features = ["std"]}
 grev = {version = "0.1.3"}
 
 [dependencies]
-apca = {version = "0.29.0"}
+apca = {version = "0.30.0"}
 anyhow = {version = "1.0", default-features = false, features = ["std"]}
 chrono = {version = "0.4.23", default-features = false}
 chrono-tz = {version = "0.8.1", default-features = false, features = ["std"]}
