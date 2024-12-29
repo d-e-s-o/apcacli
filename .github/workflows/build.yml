@@ -1,4 +1,4 @@
-# Copyright (C) 2023 Daniel Mueller <deso@posteo.net>
+# Copyright (C) 2023-2024 Daniel Mueller <deso@posteo.net>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 name: Build
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install dependencies
-        run: sudo apt-get install musl-tools
+        run: sudo apt-get install --yes --no-install-recommends musl-tools
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
