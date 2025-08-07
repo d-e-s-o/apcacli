@@ -8,9 +8,7 @@ use std::collections::HashSet;
 use std::env::var_os;
 use std::ffi::OsStr;
 use std::ffi::OsString;
-use std::io::stdout;
-use std::io::Write;
-use std::process::exit;
+use std::process::ExitCode;
 
 use apca::api::v2::order;
 use apca::api::v2::orders;
@@ -275,19 +273,16 @@ async fn run() -> Result<()> {
 }
 
 
-fn main() {
+fn main() -> ExitCode {
   let rt = Builder::new_current_thread().enable_io().build().unwrap();
   let exit_code = rt
     .block_on(run())
-    .map(|_| 0)
+    .map(|_| ExitCode::SUCCESS)
     .map_err(|e| {
       eprint!("{e}");
       e.chain().skip(1).for_each(|cause| eprint!(": {cause}"));
       eprintln!();
     })
-    .unwrap_or(1);
-  // We exit the process the hard way next, so make sure to flush
-  // buffered content.
-  let _ = stdout().flush();
-  exit(exit_code)
+    .unwrap_or(ExitCode::FAILURE);
+  exit_code
 }
