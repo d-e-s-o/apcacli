@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2024 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2020-2025 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::ffi::OsString;
@@ -98,7 +98,7 @@ impl FromStr for TimeInForce {
       "canceled" => Ok(Self::Canceled),
       "market-open" => Ok(Self::MarketOpen),
       "market-close" => Ok(Self::MarketClose),
-      _ => Err(format!("invalid time-in-force specifier: {}", src)),
+      _ => Err(format!("invalid time-in-force specifier: {src}")),
     }
   }
 }
@@ -112,7 +112,7 @@ impl FromStr for Symbol {
 
   fn from_str(sym: &str) -> Result<Self, Self::Err> {
     let sym =
-      asset::Symbol::from_str(sym).map_err(|e| format!("failed to parse symbol {}: {}", sym, e))?;
+      asset::Symbol::from_str(sym).map_err(|e| format!("failed to parse symbol {sym}: {e}"))?;
 
     Ok(Self(sym))
   }
@@ -231,8 +231,7 @@ impl FromStr for TimeFrame {
       "hour" => Ok(TimeFrame::Hour),
       "minute" => Ok(TimeFrame::Minute),
       s => Err(format!(
-        "{} is not a valid time frame specification (use 'day', 'hour', or 'minute')",
-        s
+        "{s} is not a valid time frame specification (use 'day', 'hour', or 'minute')"
       )),
     }
   }
@@ -293,8 +292,7 @@ impl FromStr for DataSource {
       "iex" => Ok(DataSource::Iex),
       "sip" => Ok(DataSource::Sip),
       s => Err(format!(
-        "{} is not a valid data source (use 'iex' or 'sip')",
-        s
+        "{s} is not a valid data source (use 'iex' or 'sip')"
       )),
     }
   }
@@ -447,8 +445,7 @@ impl FromStr for Side {
       "buy" => Ok(Side::Buy),
       "sell" => Ok(Side::Sell),
       s => Err(format!(
-        "{} is not a valid side specification (use 'buy' or 'sell')",
-        s
+        "{s} is not a valid side specification (use 'buy' or 'sell')"
       )),
     }
   }

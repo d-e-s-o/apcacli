@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2019-2025 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
@@ -562,12 +562,7 @@ async fn bars_get(
     let response = client
       .issue::<bars::List>(&request)
       .await
-      .with_context(|| {
-        format!(
-          "failed to retrieve historical aggregate bars for {}",
-          symbol
-        )
-      })?;
+      .with_context(|| format!("failed to retrieve historical aggregate bars for {symbol}"))?;
     for bar in response.bars {
       let time = New_York.from_utc_datetime(&bar.time.naive_utc());
       println!(
@@ -884,7 +879,7 @@ async fn value_to_quantity(
       let mut quotes = client
         .issue::<last_quotes::Get>(&request)
         .await
-        .with_context(|| format!("failed to retrieve last quote for {}", symbol))?;
+        .with_context(|| format!("failed to retrieve last quote for {symbol}"))?;
 
       let quote = match quotes.as_mut_slice() {
         [(_symbol, quote)] => {
@@ -1128,7 +1123,7 @@ async fn order_cancel(client: Client, cancel: CancelOrder) -> Result<()> {
           let id = order.id;
           client.issue::<order::Delete>(&id).map_err(move |e| {
             let id = order.id.as_hyphenated();
-            Error::new(e).context(format!("failed to cancel order {}", id))
+            Error::new(e).context(format!("failed to cancel order {id}"))
           })
         })
         .collect::<FuturesUnordered<_>>()
@@ -1494,7 +1489,7 @@ async fn position_close(client: Client, symbol: Symbol) -> Result<()> {
 
 /// Format a price value.
 fn format_price(price: &Num, currency: &str) -> Str {
-  format!("{:.2} {}", price, currency).into()
+  format!("{price:.2} {currency}").into()
 }
 
 /// Format an optional price value.
@@ -2068,7 +2063,7 @@ async fn run() -> Result<()> {
             // Because of clap's brain dead API, we see no other way
             // but to leak the string we created here. That's okay,
             // though, because we exit in a moment anyway.
-            let about = Box::leak(format!("Run the {} extension", name).into_boxed_str());
+            let about = Box::leak(format!("Run the {name} extension").into_boxed_str());
             clap = clap.subcommand(
               clap::Command::new(name)
                 // Use some magic number here that causes all
@@ -2093,7 +2088,7 @@ async fn run() -> Result<()> {
         return Ok(())
       },
       clap::error::ErrorKind::DisplayVersion => {
-        print!("{}", err);
+        print!("{err}");
         return Ok(())
       },
       _ => return Err(err.into()),
@@ -2145,8 +2140,8 @@ fn main() {
     .block_on(run())
     .map(|_| 0)
     .map_err(|e| {
-      eprint!("{}", e);
-      e.chain().skip(1).for_each(|cause| eprint!(": {}", cause));
+      eprint!("{e}");
+      e.chain().skip(1).for_each(|cause| eprint!(": {cause}"));
       eprintln!();
     })
     .unwrap_or(1);
@@ -2185,7 +2180,7 @@ mod tests {
   #[test]
   fn no_extensions_to_discover() {
     let exts = discover_extensions([]).unwrap();
-    assert!(exts.is_empty(), "{:?}", exts);
+    assert!(exts.is_empty(), "{exts:?}");
   }
 
   /// Check that we can discover extensions.

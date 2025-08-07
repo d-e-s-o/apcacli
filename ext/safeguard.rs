@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2023-2025 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![allow(clippy::let_and_return, clippy::let_unit_value)]
@@ -281,8 +281,8 @@ fn main() {
     .block_on(run())
     .map(|_| 0)
     .map_err(|e| {
-      eprint!("{}", e);
-      e.chain().skip(1).for_each(|cause| eprint!(": {}", cause));
+      eprint!("{e}");
+      e.chain().skip(1).for_each(|cause| eprint!(": {cause}"));
       eprintln!();
     })
     .unwrap_or(1);
