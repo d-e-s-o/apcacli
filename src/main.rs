@@ -23,15 +23,14 @@ use std::fmt::Display;
 use std::fs::read_dir;
 use std::future::Future;
 use std::io;
-use std::io::stdout;
 use std::io::Write;
 use std::mem::take;
 use std::ops::Deref as _;
 use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::exit;
 use std::process::Command as Process;
+use std::process::ExitCode;
 
 use apca::api::v2::account;
 use apca::api::v2::account_activities;
@@ -2130,7 +2129,7 @@ async fn run() -> Result<()> {
   }
 }
 
-fn main() {
+fn main() -> ExitCode {
   let rt = Builder::new_current_thread()
     .enable_io()
     .enable_time()
@@ -2138,17 +2137,15 @@ fn main() {
     .unwrap();
   let exit_code = rt
     .block_on(run())
-    .map(|_| 0)
+    .map(|_| ExitCode::SUCCESS)
     .map_err(|e| {
       eprint!("{e}");
       e.chain().skip(1).for_each(|cause| eprint!(": {cause}"));
       eprintln!();
     })
-    .unwrap_or(1);
-  // We exit the process the hard way next, so make sure to flush
-  // buffered content.
-  let _ = stdout().flush();
-  exit(exit_code)
+    .unwrap_or(ExitCode::FAILURE);
+
+  exit_code
 }
 
 
