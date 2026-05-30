@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Daniel Mueller <deso@posteo.net>
+// Copyright (C) 2019-2026 Daniel Mueller <deso@posteo.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![type_length_limit = "536870912"]
@@ -86,8 +86,9 @@ use tokio::runtime::Builder;
 
 use tracing::subscriber::set_global_default as set_global_subscriber;
 use tracing::warn;
+use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::fmt::time::SystemTime;
+use tracing_subscriber::fmt::time::ChronoLocal;
 use tracing_subscriber::FmtSubscriber;
 
 use yansi::Painted;
@@ -2042,6 +2043,51 @@ fn extension(args: Vec<OsString>) -> Result<()> {
   Err(err).with_context(|| format!("failed to execute extension {}", ext_path.display()))
 }
 
+fn init_logging(verbosity: u8) -> Result<()> {
+  enum Filter {
+    Level(LevelFilter),
+    Env(String),
+  }
+
+  let filter = match verbosity {
+    0 => {
+      // Check if `RUST_LOG` is present and honor it if so.
+      if let Some(env) = var_os(EnvFilter::DEFAULT_ENV) {
+        let directive = env
+          .into_string()
+          .ok()
+          .with_context(|| format!("env var `{}` is not valid UTF-8", EnvFilter::DEFAULT_ENV))?;
+
+        Filter::Env(directive)
+      } else {
+        // Use 'warn' as the default level.
+        Filter::Level(LevelFilter::WARN)
+      }
+    },
+    1 => Filter::Level(LevelFilter::INFO),
+    2 => Filter::Level(LevelFilter::DEBUG),
+    _ => Filter::Level(LevelFilter::TRACE),
+  };
+
+  let builder =
+    FmtSubscriber::builder().with_timer(ChronoLocal::new("%Y-%m-%dT%H:%M:%S%.3f%:z".to_string()));
+  match filter {
+    Filter::Level(level) => {
+      let subscriber = builder.with_max_level(level).finish();
+      let () =
+        set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
+    },
+    Filter::Env(directive) => {
+      let subscriber = builder
+        .with_env_filter(EnvFilter::try_new(directive).context("invalid logging directive")?)
+        .finish();
+      let () =
+        set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
+    },
+  }
+  Ok(())
+}
+
 async fn run() -> Result<()> {
   let args = match Args::try_parse_from(args_os()) {
     Ok(args) => args,
@@ -2094,19 +2140,7 @@ async fn run() -> Result<()> {
     },
   };
 
-  let level = match args.verbosity {
-    0 => LevelFilter::WARN,
-    1 => LevelFilter::INFO,
-    2 => LevelFilter::DEBUG,
-    _ => LevelFilter::TRACE,
-  };
-
-  let subscriber = FmtSubscriber::builder()
-    .with_max_level(level)
-    .with_timer(SystemTime)
-    .finish();
-
-  set_global_subscriber(subscriber).with_context(|| "failed to set tracing subscriber")?;
+  let () = init_logging(args.verbosity).context("failed to initialize logging infrastructure")?;
 
   if let Command::Extension(command) = args.command {
     self::extension(command)
