@@ -189,8 +189,6 @@ async fn account_get(client: Client) -> Result<()> {
   margin multiplier:  {multiplier}
   initial margin:     {initial_margin}
   maintenance margin: {maintenance_margin}
-  day trade count:    {day_trade_count}
-  day trader:         {day_trader}
   shorting enabled:   {shorting_enabled}
   trading suspended:  {trading_suspended}
   trading blocked:    {trading_blocked}
@@ -207,8 +205,6 @@ async fn account_get(client: Client) -> Result<()> {
     multiplier = account.multiplier,
     initial_margin = format_price(&account.initial_margin, &account.currency),
     maintenance_margin = format_price(&account.maintenance_margin, &account.currency),
-    day_trade_count = account.daytrade_count,
-    day_trader = account.day_trader,
     shorting_enabled = account.shorting_enabled,
     trading_suspended = account.trading_suspended,
     trading_blocked = account.trading_blocked,

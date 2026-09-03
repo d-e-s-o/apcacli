@@ -1,5 +1,6 @@
 Unreleased
 ----------
+- Bumped `apca` dependency to `0.31`
 - Bumped `yansi` dependency to `1.0`
 
 
