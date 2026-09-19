@@ -1,6 +1,6 @@
 [![pipeline](https://github.com/d-e-s-o/apcacli/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/d-e-s-o/apcacli/actions/workflows/test.yml)
 [![crates.io](https://img.shields.io/crates/v/apcacli.svg)](https://crates.io/crates/apcacli)
-[![rustc](https://img.shields.io/badge/rustc-1.71+-blue.svg)](https://blog.rust-lang.org/2023/07/13/Rust-1.71.0.html)
+[![rustc](https://img.shields.io/badge/rustc-1.74+-blue.svg)](https://blog.rust-lang.org/2023/11/16/Rust-1.74.0/)
 
 apcacli
 =======
